@@ -33,19 +33,43 @@ function ActivityFeed({ activity }: { activity: Activity[] }) {
 // ── ProjectInfo ───────────────────────────────────────────────────────────────
 interface Collaborator { id: string; initial: string; color: string; }
 
-function ProjectInfo({ name, bpm, collaborators }: { name: string; bpm: number; collaborators: Collaborator[] }) {
+function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { name: string; bpm: number; collaborators: Collaborator[]; currentStep: number; isPlaying: boolean }) {
+  const currentCompase = Math.floor(currentStep / 16);
+  const nextCompase = currentCompase + 1;
+  const compases = isPlaying && currentStep >= 0 ? `${currentCompase + 1}-${nextCompase + 1}` : '1-2';
+
+  const secondsPerStep = 60 / bpm / 4;
+  const totalSeconds = currentStep >= 0 ? Math.floor(currentStep * secondsPerStep) : 0;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const duracion = isPlaying && currentStep >= 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : '1:30';
+  
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 32, marginBottom: 12 }}>
+      {/* Mini waveform visualization */}
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 32, marginBottom: 12 }}>
         {Array.from({ length: 24 }).map((_, i) => {
-          const h = 20 + Math.sin(i * 0.8) * 10;
+          const h = 20 + Math.sin(i * 0.8) * 10 + Math.random() * 8;
           const isGreen = i < 14;
-          return <div key={i} style={{ flex: 1, height: `${h}px`, borderRadius: 2, background: isGreen ? 'var(--neon-green)' : 'var(--bg-raised)', opacity: isGreen ? 0.8 : 0.3 }} />;
+          return (
+            <div key={i} style={{
+              flex: 1, height: `${h}px`, borderRadius: 2,
+              background: isGreen ? "var(--neon-green)" : "var(--bg-raised)",
+              opacity: isGreen ? 0.8 : 0.3,
+              animation: `glow-pulse ${1 + i * 0.1}s ease infinite`,
+            }} />
+          );
         })}
       </div>
       <div style={{ fontSize: 13, fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: 6 }}>{name}</div>
-      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 4 }}>
         BPM: <span style={{ color: 'var(--neon-cyan)' }}>{bpm}</span>
+      </div>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 4 }}>
+        Compases: <span style={{ color: 'var(--text-primary)' }}>{compases}</span>
+      </div>
+      <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 12 }}>
+        Duración: <span style={{ color: 'var(--text-primary)' }}>{duracion}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         {collaborators.map((c, i) => (
@@ -167,7 +191,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flexShrink: 0 }}>
             <ActivityFeed activity={MOCK_ACTIVITY} />
-            <ProjectInfo name={project.name} bpm={bpm} collaborators={MOCK_COLLABORATORS} />
+            <ProjectInfo name={project.name} bpm={bpm} collaborators={MOCK_COLLABORATORS} currentStep={currentStep} isPlaying={isPlaying} />
           </div>
         </div>
       </div>
