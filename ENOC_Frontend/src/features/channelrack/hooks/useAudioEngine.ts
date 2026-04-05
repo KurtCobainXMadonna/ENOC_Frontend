@@ -5,6 +5,19 @@ export function useAudioEngine(bpm: number = 120) {
   const playersRef = useRef<Map<string, Tone.Player>>(new Map());
   const sequenceRef = useRef<Tone.Sequence | null>(null);
 
+  const stopSequencer = () => {
+    sequenceRef.current?.stop();
+    Tone.getTransport().stop();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopSequencer();
+      playersRef.current.forEach(player => player.dispose());
+      playersRef.current.clear();
+    };
+  }, []);
+
   const loadSample = async (channelId: string, blobUrl: string) => {
     const player = new Tone.Player(blobUrl).toDestination();
     await Tone.loaded();
@@ -30,11 +43,6 @@ export function useAudioEngine(bpm: number = 120) {
 
     sequenceRef.current.start(0);
     Tone.getTransport().start();
-  };
-
-  const stopSequencer = () => {
-    sequenceRef.current?.stop();
-    Tone.getTransport().stop();
   };
 
   return { loadSample, startSequencer, stopSequencer };

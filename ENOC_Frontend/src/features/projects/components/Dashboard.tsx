@@ -1,11 +1,28 @@
-export function Dashboard({ onOpenProject }) {
+import { useState } from 'react';
+import { Icon } from '../../../shared/components/Icon';
+import { Modal } from '../../../shared/components/Modal';
+import { MOCK_PROJECTS } from '../../channelrack/constants';
+
+interface Project {
+  id: string;
+  name: string;
+  owner: string;
+  lastModified: string;
+  isOwner: boolean;
+}
+
+interface DashboardProps {
+  onOpenProject: (project: Project) => void;
+}
+
+export function Dashboard({ onOpenProject }: DashboardProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [projectName, setProjectName] = useState("Nuevo Beat");
   const [bpm, setBpm] = useState(120);
   const [inviteCode, setInviteCode] = useState("");
   const [projects, setProjects] = useState(MOCK_PROJECTS);
-  const [contextMenu, setContextMenu] = useState(null);
+  const [contextMenu, setContextMenu] = useState<string | null>(null);
 
   const handleCreate = () => {
     const newProject = { id: `p${Date.now()}`, name: projectName, owner: "Tú", lastModified: "Ahora", isOwner: true };
@@ -15,7 +32,7 @@ export function Dashboard({ onOpenProject }) {
     onOpenProject(newProject);
   };
 
-  const handleDelete = (projectId) => {
+  const handleDelete = (projectId: string) => {
     setProjects(prev => prev.filter(p => p.id !== projectId));
     setContextMenu(null);
   };
@@ -142,8 +159,8 @@ export function Dashboard({ onOpenProject }) {
                     <button
                       onClick={e => { e.stopPropagation(); onOpenProject(project); setContextMenu(null); }}
                       style={{ display: "block", width: "100%", padding: "10px 16px", background: "none", border: "none", color: "var(--text-primary)", cursor: "pointer", fontSize: 12, textAlign: "left", fontFamily: "var(--font-ui)" }}
-                      onMouseEnter={e => e.target.style.background = "var(--bg-hover)"}
-                      onMouseLeave={e => e.target.style.background = "none"}
+                      onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "var(--bg-hover)"}
+                      onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "none"}
                     >
                       Compartir
                     </button>
@@ -151,8 +168,8 @@ export function Dashboard({ onOpenProject }) {
                       <button
                         onClick={e => { e.stopPropagation(); handleDelete(project.id); }}
                         style={{ display: "block", width: "100%", padding: "10px 16px", background: "none", border: "none", color: "var(--neon-pink)", cursor: "pointer", fontSize: 12, textAlign: "left", fontFamily: "var(--font-ui)" }}
-                        onMouseEnter={e => e.target.style.background = "rgba(255,45,107,0.1)"}
-                        onMouseLeave={e => e.target.style.background = "none"}
+                        onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,45,107,0.1)"}
+                        onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = "none"}
                       >
                         Eliminar
                       </button>
@@ -175,7 +192,7 @@ export function Dashboard({ onOpenProject }) {
           <div>
             <label className="label">BPM:</label>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input className="input" type="number" value={bpm} onChange={e => setBpm(e.target.value)} style={{ flex: 1 }} />
+              <input className="input" type="number" value={bpm} onChange={e => setBpm(Number(e.target.value))} style={{ flex: 1 }} />
               <button onClick={() => setBpm(b => Math.max(40, +b - 1))} className="btn btn-ghost" style={{ padding: "8px 12px" }}><Icon.Minus /></button>
               <button onClick={() => setBpm(b => Math.min(240, +b + 1))} className="btn btn-ghost" style={{ padding: "8px 12px" }}><Icon.Plus /></button>
             </div>
