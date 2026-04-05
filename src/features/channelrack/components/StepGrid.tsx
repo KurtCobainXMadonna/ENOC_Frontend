@@ -34,7 +34,7 @@ export function StepGrid({ steps, currentStep, isPlaying, onToggleStep }: StepGr
           active={active}
           beat={stepIdx % 4 === 0}
           playing={isPlaying && currentStep === stepIdx}
-          accent={active && stepIdx % 4 === 0}
+          accent={active && Math.floor(stepIdx / 4) % 2 === 1}
           onClick={() => onToggleStep(stepIdx)}
         />
       ))}

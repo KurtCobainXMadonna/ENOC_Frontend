@@ -65,7 +65,7 @@ export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMu
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: 3 }}>
         {channel.steps.map((active, stepIdx) => (
-          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && stepIdx % 4 === 0} onClick={() => onToggleStep(stepIdx)} />
+          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && Math.floor(stepIdx / 4) % 2 === 1} onClick={() => onToggleStep(stepIdx)} />
         ))}
       </div>
 

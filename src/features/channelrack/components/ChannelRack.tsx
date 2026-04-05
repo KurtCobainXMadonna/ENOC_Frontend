@@ -48,7 +48,7 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
       {/* Mini waveform visualization */}
       <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 32, marginBottom: 12 }}>
-        {Array.from({ length: 24 }).map((_, i) => {
+        {Array.from({ length: 14 }).map((_, i) => {
           const h = 20 + Math.sin(i * 0.8) * 10 + Math.random() * 8;
           const isGreen = i < 14;
           return (
