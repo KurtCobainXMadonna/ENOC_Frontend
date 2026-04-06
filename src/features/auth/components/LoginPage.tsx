@@ -1,10 +1,64 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useGoogleAuth } from '../hooks/useGoogleAuth';
+
+type GoogleCredentialResponse = {
+  credential: string;
+};
+
+type GoogleAccountsId = {
+  initialize: (config: {
+    client_id: string;
+    callback: (response: GoogleCredentialResponse) => void | Promise<void>;
+  }) => void;
+  renderButton: (parent: HTMLElement, options: { theme: string; size: string; width: number }) => void;
+};
+
+type WindowWithGoogle = Window & {
+  google?: {
+    accounts?: {
+      id?: GoogleAccountsId;
+    };
+  };
+};
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const { loginWithGoogle } = useGoogleAuth();
+
+  useEffect(() => {
+    if (isRegister) {
+      return;
+    }
+
+    const googleAccountsId = (window as WindowWithGoogle).google?.accounts?.id;
+    if (!googleAccountsId || !googleButtonRef.current) {
+      return;
+    }
+
+    googleButtonRef.current.innerHTML = '';
+
+    googleAccountsId.initialize({
+      client_id: '633269369574-jgqsgh5tose0th0g32g0igd57q7bfv6m.apps.googleusercontent.com',  //TOCA CAMBIAR ESTA VAINA A V.E.
+      callback: async ({ credential }) => {
+        try {
+          await loginWithGoogle(credential);
+          onLogin();
+        } catch (error) {
+          console.error('Google login failed', error);
+        }
+      },
+    });
+
+    googleAccountsId.renderButton(googleButtonRef.current, {
+      theme: 'filled_black',
+      size: 'large',
+      width: 300,
+    });
+  }, [isRegister, loginWithGoogle, onLogin]);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(155,93,229,0.12) 0%, var(--bg-void) 60%)', position: 'relative', overflow: 'hidden' }}>
@@ -41,9 +95,13 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
                 <input className="input" type="password" placeholder="••••••••" />
               </div>
             )}
-            <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }} onClick={onLogin}>
-              {isRegister ? 'Registrarse' : 'Entrar'}
-            </button>
+            {isRegister ? (
+              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 4 }} onClick={onLogin}>
+                Registrarse
+              </button>
+            ) : (
+              <div ref={googleButtonRef} style={{ display: 'flex', justifyContent: 'center', marginTop: 4 }} />
+            )}
             <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {isRegister ? '¿Ya tienes cuenta?' : '¿No tienes cuenta?'}{' '}
               <button onClick={() => setIsRegister(!isRegister)} style={{ background: 'none', border: 'none', color: 'var(--neon-violet)', cursor: 'pointer', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
