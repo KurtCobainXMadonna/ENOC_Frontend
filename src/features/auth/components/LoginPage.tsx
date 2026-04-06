@@ -22,6 +22,7 @@ type WindowWithGoogle = Window & {
 };
 
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -36,14 +37,17 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
 
     try {
       const googleAccountsId = (window as WindowWithGoogle).google?.accounts?.id;
-      if (!googleAccountsId || !googleButtonRef.current) {
+      if (!googleAccountsId || !googleButtonRef.current || !googleClientId) {
+        if (!googleClientId) {
+          console.error('Missing VITE_GOOGLE_CLIENT_ID in frontend environment variables.');
+        }
         return;
       }
 
       googleButtonRef.current.innerHTML = '';
 
       googleAccountsId.initialize({
-        client_id: '633269369574-jgqsgh5tose0th0g32g0igd57q7bfv6m.apps.googleusercontent.com',
+        client_id: googleClientId,
         callback: async ({ credential }) => {
           try {
             await loginWithGoogle(credential);
@@ -62,7 +66,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
     } catch (error) {
       console.error('Google SDK init failed', error);
     }
-  }, [isRegister, loginWithGoogle, onLogin]);
+  }, [googleClientId, isRegister, loginWithGoogle, onLogin]);
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(155,93,229,0.12) 0%, var(--bg-void) 60%)', position: 'relative', overflow: 'hidden' }}>
