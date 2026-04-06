@@ -3,7 +3,12 @@ import { Icon } from '../../../shared/components/Icon';
 import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
 import { ChannelRow } from './Channel';
-import { MOCK_SOUNDS, MOCK_ACTIVITY, MOCK_COLLABORATORS, INITIAL_CHANNELS } from '../constants';
+import { MOCK_SOUNDS, MOCK_ACTIVITY, MOCK_COLLABORATORS } from '../constants';
+import { useRackStore } from '../store/rackStore';
+import { useRack } from '../hooks/useRack';
+import { useRackSocket } from '../hooks/useRackSocket';
+import { useSessionStore } from '../../projects/store/sessionStore';
+import { useSession } from '../../projects/hooks/useSession';
 
 // ── ActivityFeed ──────────────────────────────────────────────────────────────
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
@@ -86,12 +91,18 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
 interface Project { id: string; name: string; }
 
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
-  const [channels, setChannels] = useState(INITIAL_CHANNELS);
+  const { channels, rackId, version } = useRackStore();
+  const sessionId = useSessionStore(s => s.sessionId);
+  useSession(project.id);
+  const { sendCommand } = useRackSocket(sessionId ?? 'local-session');
+  useRack(project.id);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [bpm, setBpm] = useState(102);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepRef = useRef(-1);
+  const activeRackId = rackId ?? project.id;
 
   const startSequencer = useCallback(() => {
     const interval = (60 / bpm / 4) * 1000;
@@ -114,24 +125,53 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   }, [isPlaying, startSequencer, stopSequencer]);
 
   const toggleStep = (channelId: string, stepIdx: number) => {
-    setChannels(prev => prev.map(ch =>
-      ch.id === channelId ? { ...ch, steps: ch.steps.map((s, i) => i === stepIdx ? !s : s) } : ch
-    ));
+    const channel = channels.find(c => c.id === channelId);
+    if (!channel) {
+      return;
+    }
+
+    const action = channel.steps[stepIdx] ? 'deactivateStep' : 'activateStep';
+    sendCommand(action, {
+      rackId: activeRackId,
+      channelId,
+      stepIndex: stepIdx,
+      expectedVersion: version,
+    });
   };
 
   const toggleMute = (channelId: string) => {
-    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, isMute: !ch.isMute } : ch));
+    sendCommand('toggleMute', {
+      rackId: activeRackId,
+      channelId,
+      expectedVersion: version,
+    });
   };
 
   const removeChannel = (channelId: string) => {
-    setChannels(prev => prev.filter(ch => ch.id !== channelId));
+    sendCommand('removeChannel', {
+      rackId: activeRackId,
+      channelId,
+      expectedVersion: version,
+    });
   };
 
   const addChannel = () => {
-    setChannels(prev => [...prev, {
-      id: `c${Date.now()}`, name: `Channel ${prev.length + 1}`,
-      soundId: 's1', volume: 80, isMute: false, steps: Array(16).fill(false),
-    }]);
+    sendCommand('addChannel', {
+      rackId: activeRackId,
+      channelId: `c${Date.now()}`,
+      name: `Channel ${channels.length + 1}`,
+      sampleId: 's1',
+      expectedVersion: version,
+    });
+  };
+
+  const changeVolume = (channelId: string, volume: number) => {
+    sendCommand('setChannelVolume', {
+      rackId: activeRackId,
+      channelId,
+      volume,
+      expectedVersion: version,
+    });
   };
 
   return (
@@ -178,11 +218,11 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
               )}
               {channels.map((channel, i) => (
                 <ChannelRow
-                  key={channel.id} channel={channel} currentStep={currentStep}
+                  key={channel.id} channel={{ ...channel, soundId: channel.sampleId }} currentStep={currentStep}
                   isPlaying={isPlaying} index={i}
                   onToggleStep={stepIdx => toggleStep(channel.id, stepIdx)}
                   onMute={() => toggleMute(channel.id)}
-                  onVolumeChange={v => setChannels(prev => prev.map(ch => ch.id === channel.id ? { ...ch, volume: v } : ch))}
+                  onVolumeChange={v => changeVolume(channel.id, v)}
                   onRemove={() => removeChannel(channel.id)}
                 />
               ))}

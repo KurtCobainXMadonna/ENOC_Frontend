@@ -1,9 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Icon } from '../../../shared/components/Icon';
+import { api } from '../../../shared/api/client';
 
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
 
-export function SoundLibrary({ sounds }: { sounds: Sound[] }) {
+export function SoundLibrary({ sounds: initialSounds = [] }: { sounds?: Sound[] }) {
+  const [sounds, setSounds] = useState<Sound[]>(initialSounds);
+
+  useEffect(() => {
+    api.get('/api/sounds').then(res => setSounds(res.data.data));
+  }, []);
+
   const [search, setSearch] = useState('');
   const filtered = sounds.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
   const categories = [...new Set(filtered.map(s => s.category))];

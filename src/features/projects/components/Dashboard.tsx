@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '../../../shared/components/Icon';
 import { Modal } from '../../../shared/components/Modal';
+import { api } from '../../../shared/api/client';
 import { MOCK_PROJECTS } from '../../channelrack/constants';
 
 interface Project {
@@ -24,12 +25,21 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
   const [projects, setProjects] = useState(MOCK_PROJECTS);
   const [contextMenu, setContextMenu] = useState<string | null>(null);
 
-  const handleCreate = () => {
-    const newProject = { id: `p${Date.now()}`, name: projectName, owner: "Tú", lastModified: "Ahora", isOwner: true };
-    setProjects(prev => [newProject, ...prev]);
-    setCreateOpen(false);
-    setProjectName("Nuevo Beat");
-    onOpenProject(newProject);
+  const handleCreate = async () => {
+    try {
+      // 1. Crear rack en backend
+      const { data } = await api.post('/api/v1/channel-rack');
+      const rackId = data.id;
+
+      // 2. Crear proyecto local usando rackId (mientras se integra endpoint de proyectos)
+      const newProject = { id: rackId, name: projectName, owner: "Tú", lastModified: "Ahora", isOwner: true };
+      setProjects(prev => [newProject, ...prev]);
+      setCreateOpen(false);
+      setProjectName("Nuevo Beat");
+      onOpenProject(newProject);
+    } catch (error) {
+      console.error('Error creando rack/proyecto:', error);
+    }
   };
 
   const handleDelete = (projectId: string) => {

@@ -34,30 +34,34 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
       return;
     }
 
-    const googleAccountsId = (window as WindowWithGoogle).google?.accounts?.id;
-    if (!googleAccountsId || !googleButtonRef.current) {
-      return;
+    try {
+      const googleAccountsId = (window as WindowWithGoogle).google?.accounts?.id;
+      if (!googleAccountsId || !googleButtonRef.current) {
+        return;
+      }
+
+      googleButtonRef.current.innerHTML = '';
+
+      googleAccountsId.initialize({
+        client_id: '633269369574-jgqsgh5tose0th0g32g0igd57q7bfv6m.apps.googleusercontent.com',
+        callback: async ({ credential }) => {
+          try {
+            await loginWithGoogle(credential);
+            onLogin();
+          } catch (error) {
+            console.error('Google login failed', error);
+          }
+        },
+      });
+
+      googleAccountsId.renderButton(googleButtonRef.current, {
+        theme: 'filled_black',
+        size: 'large',
+        width: 300,
+      });
+    } catch (error) {
+      console.error('Google SDK init failed', error);
     }
-
-    googleButtonRef.current.innerHTML = '';
-
-    googleAccountsId.initialize({
-      client_id: '633269369574-jgqsgh5tose0th0g32g0igd57q7bfv6m.apps.googleusercontent.com',  //TOCA CAMBIAR ESTA VAINA A V.E.
-      callback: async ({ credential }) => {
-        try {
-          await loginWithGoogle(credential);
-          onLogin();
-        } catch (error) {
-          console.error('Google login failed', error);
-        }
-      },
-    });
-
-    googleAccountsId.renderButton(googleButtonRef.current, {
-      theme: 'filled_black',
-      size: 'large',
-      width: 300,
-    });
   }, [isRegister, loginWithGoogle, onLogin]);
 
   return (
