@@ -4,6 +4,7 @@ import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
 import { ChannelRow } from './Channel';
 import { MOCK_SOUNDS, MOCK_ACTIVITY, MOCK_COLLABORATORS, INITIAL_CHANNELS } from '../constants';
+import { useRackSocket } from '../hooks/useRackSocket';
 
 // ── ActivityFeed ──────────────────────────────────────────────────────────────
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
@@ -87,11 +88,93 @@ interface Project { id: string; name: string; }
 
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
   const [channels, setChannels] = useState(INITIAL_CHANNELS);
+  const [wsChannels, setWsChannels] = useState<any[]>([]);
+  const [rackLoaded, setRackLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [bpm, setBpm] = useState(102);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepRef = useRef(-1);
+
+  const updateWsChannel = useCallback((channelId: string, updater: (channel: any) => any) => {
+    setWsChannels(prev => prev.map(ch => (ch.id === channelId ? updater(ch) : ch)));
+  }, []);
+
+  const handleRackEvent = useCallback((event: any) => {
+    switch (event.type) {
+      case 'RACK_STATE':
+        setWsChannels(event.payload.channels.map((ch: any) => ({
+          id: ch.channelId,
+          name: ch.name,
+          soundId: ch.soundId,
+          volume: Math.round(ch.volume * 100),
+          isMute: !ch.active,
+          steps: Array.from(ch.steps as boolean[]),
+        })));
+        setRackLoaded(true);
+        break;
+      case 'CHANNEL_ADDED':
+        setWsChannels(prev => [...prev, {
+          id: event.payload.channelId,
+          name: event.payload.name,
+          soundId: event.payload.soundId,
+          volume: 80,
+          isMute: false,
+          steps: Array(16).fill(false),
+        }]);
+        break;
+      case 'CHANNEL_REMOVED':
+        setWsChannels(prev => prev.filter(ch => ch.id !== event.payload.channelId));
+        break;
+      case 'STEP_TOGGLED':
+        setWsChannels(prev => prev.map(ch =>
+          ch.id === event.payload.channelId
+            ? {
+                ...ch,
+                steps: ch.steps.map((s: boolean, i: number) =>
+                  i === event.payload.stepIndex ? event.payload.newValue : s),
+              }
+            : ch,
+        ));
+        break;
+      case 'CHANNEL_MUTED':
+      case 'MUTE_TOGGLED':
+      case 'ChannelMuted':
+      case 'CHANNEL_UPDATED':
+      case 'ChannelUpdated': {
+        const channelId = event.payload.channelId ?? event.payload.id;
+        const muteValue = event.payload.mute ?? event.payload.isMute;
+        const activeValue = event.payload.active;
+        if (channelId) {
+          updateWsChannel(channelId, (ch: any) => ({
+            ...ch,
+            isMute: typeof muteValue === 'boolean'
+              ? muteValue
+              : (typeof activeValue === 'boolean' ? !activeValue : ch.isMute),
+          }));
+        }
+        break;
+      }
+      case 'CHANNEL_VOLUME_CHANGED':
+      case 'VOLUME_CHANGED':
+      case 'ChannelVolumeChanged': {
+        const channelId = event.payload.channelId ?? event.payload.id;
+        if (channelId && typeof event.payload.volume === 'number') {
+          updateWsChannel(channelId, (ch: any) => ({
+            ...ch,
+            volume: event.payload.volume <= 1 ? Math.round(event.payload.volume * 100) : Math.round(event.payload.volume),
+          }));
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }, [updateWsChannel]);
+
+  const { toggleStep, addChannel, removeChannel, toggleMute: toggleMuteWs, setVolume } = useRackSocket(project.id, handleRackEvent);
+  const displayChannels = rackLoaded ? wsChannels : channels;
+  
 
   const startSequencer = useCallback(() => {
     const interval = (60 / bpm / 4) * 1000;
@@ -113,25 +196,20 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [isPlaying, startSequencer, stopSequencer]);
 
-  const toggleStep = (channelId: string, stepIdx: number) => {
-    setChannels(prev => prev.map(ch =>
-      ch.id === channelId ? { ...ch, steps: ch.steps.map((s, i) => i === stepIdx ? !s : s) } : ch
-    ));
-  };
-
   const toggleMute = (channelId: string) => {
+    if (rackLoaded) {
+      toggleMuteWs(channelId);
+      return;
+    }
     setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, isMute: !ch.isMute } : ch));
   };
 
-  const removeChannel = (channelId: string) => {
-    setChannels(prev => prev.filter(ch => ch.id !== channelId));
-  };
-
-  const addChannel = () => {
-    setChannels(prev => [...prev, {
-      id: `c${Date.now()}`, name: `Channel ${prev.length + 1}`,
-      soundId: 's1', volume: 80, isMute: false, steps: Array(16).fill(false),
-    }]);
+  const handleVolumeChange = (channelId: string, volume: number) => {
+    if (rackLoaded) {
+      setVolume(channelId, volume);
+      return;
+    }
+    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, volume } : ch));
   };
 
   return (
@@ -164,25 +242,29 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                   ))}
                 </div>
               </div>
-              <button className="btn btn-primary" style={{ padding: '5px 10px', fontSize: 10 }} onClick={addChannel}>
+              <button
+                className="btn btn-primary"
+                style={{ padding: '5px 10px', fontSize: 10 }}
+                onClick={() => addChannel(`Channel ${displayChannels.length + 1}`, 's1')}
+              >
                 <Icon.Plus /> Canal
               </button>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px' }}>
-              {channels.length === 0 && (
+              {displayChannels.length === 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                   <div style={{ fontSize: 32, opacity: 0.3 }}>♪</div>
                   <div>Arrastra un sonido o añade un canal</div>
                 </div>
               )}
-              {channels.map((channel, i) => (
+              {displayChannels.map((channel, i) => (
                 <ChannelRow
                   key={channel.id} channel={channel} currentStep={currentStep}
                   isPlaying={isPlaying} index={i}
                   onToggleStep={stepIdx => toggleStep(channel.id, stepIdx)}
                   onMute={() => toggleMute(channel.id)}
-                  onVolumeChange={v => setChannels(prev => prev.map(ch => ch.id === channel.id ? { ...ch, volume: v } : ch))}
+                  onVolumeChange={v => handleVolumeChange(channel.id, v)}
                   onRemove={() => removeChannel(channel.id)}
                 />
               ))}

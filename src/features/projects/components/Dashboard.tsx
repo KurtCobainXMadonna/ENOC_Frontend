@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Icon } from '../../../shared/components/Icon';
 import { Modal } from '../../../shared/components/Modal';
-import { MOCK_PROJECTS } from '../../channelrack/constants';
+import { useProjects } from '../hooks/useProjects';
 
 interface Project {
   id: string;
@@ -21,19 +21,19 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
   const [projectName, setProjectName] = useState("Nuevo Beat");
   const [bpm, setBpm] = useState(120);
   const [inviteCode, setInviteCode] = useState("");
-  const [projects, setProjects] = useState(MOCK_PROJECTS);
+  const { ownedProjects, collaboratingProjects, createProject, deleteProject } = useProjects();
+  const projects = [...ownedProjects, ...collaboratingProjects];
   const [contextMenu, setContextMenu] = useState<string | null>(null);
 
-  const handleCreate = () => {
-    const newProject = { id: `p${Date.now()}`, name: projectName, owner: "Tú", lastModified: "Ahora", isOwner: true };
-    setProjects(prev => [newProject, ...prev]);
+  const handleCreate = async () => {
+    const newProject = await createProject(projectName);
     setCreateOpen(false);
-    setProjectName("Nuevo Beat");
+    setProjectName('Nuevo Beat');
     onOpenProject(newProject);
   };
 
-  const handleDelete = (projectId: string) => {
-    setProjects(prev => prev.filter(p => p.id !== projectId));
+  const handleDelete = async (projectId: string) => {
+    await deleteProject(projectId);
     setContextMenu(null);
   };
 
