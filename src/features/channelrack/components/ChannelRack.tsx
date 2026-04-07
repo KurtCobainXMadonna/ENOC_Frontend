@@ -3,8 +3,20 @@ import { Icon } from '../../../shared/components/Icon';
 import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
 import { ChannelRow } from './Channel';
-import { MOCK_SOUNDS, MOCK_ACTIVITY, MOCK_COLLABORATORS, INITIAL_CHANNELS } from '../constants';
+import { MOCK_ACTIVITY, MOCK_COLLABORATORS } from '../constants';
 import { useRackSocket } from '../hooks/useRackSocket';
+import { useAudioEngine } from '../hooks/useAudioEngine';
+import { useSounds } from '../hooks/useSounds';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface Channel {
+  id: string;
+  name: string;
+  soundId: string;
+  volume: number;
+  isMute: boolean;
+  steps: boolean[];
+}
 
 // ── ActivityFeed ──────────────────────────────────────────────────────────────
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
@@ -35,28 +47,24 @@ function ActivityFeed({ activity }: { activity: Activity[] }) {
 interface Collaborator { id: string; initial: string; color: string; }
 
 function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { name: string; bpm: number; collaborators: Collaborator[]; currentStep: number; isPlaying: boolean }) {
-  const currentCompase = Math.floor(currentStep / 16);
-  const nextCompase = currentCompase + 1;
-  const compases = isPlaying && currentStep >= 0 ? `${currentCompase + 1}-${nextCompase + 1}` : '1-2';
-
   const secondsPerStep = 60 / bpm / 4;
   const totalSeconds = currentStep >= 0 ? Math.floor(currentStep * secondsPerStep) : 0;
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
-  const duracion = isPlaying && currentStep >= 0 ? `${minutes}:${seconds.toString().padStart(2, '0')}` : '1:30';
-  
+  const currentBeat = currentStep >= 0 ? Math.floor(currentStep / 4) + 1 : 1;
+  const duracion = isPlaying && currentStep >= 0
+    ? `${minutes}:${seconds.toString().padStart(2, '0')}`
+    : '0:00';
+
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
-      {/* Mini waveform visualization */}
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 32, marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 32, marginBottom: 12 }}>
         {Array.from({ length: 14 }).map((_, i) => {
-          const h = 20 + Math.sin(i * 0.8) * 10 + Math.random() * 8;
-          const isGreen = i < 14;
+          const h = 20 + Math.sin(i * 0.8) * 10;
           return (
             <div key={i} style={{
               flex: 1, height: `${h}px`, borderRadius: 2,
-              background: isGreen ? "var(--neon-green)" : "var(--bg-raised)",
-              opacity: isGreen ? 0.8 : 0.3,
+              background: 'var(--neon-green)', opacity: 0.8,
               animation: `glow-pulse ${1 + i * 0.1}s ease infinite`,
             }} />
           );
@@ -67,10 +75,10 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
         BPM: <span style={{ color: 'var(--neon-cyan)' }}>{bpm}</span>
       </div>
       <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 4 }}>
-        Compases: <span style={{ color: 'var(--text-primary)' }}>{compases}</span>
+        Beat: <span style={{ color: 'var(--text-primary)' }}>{currentBeat}/4</span>
       </div>
       <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)', marginBottom: 12 }}>
-        Duración: <span style={{ color: 'var(--text-primary)' }}>{duracion}</span>
+        Tiempo: <span style={{ color: 'var(--text-primary)' }}>{duracion}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         {collaborators.map((c, i) => (
@@ -83,139 +91,198 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
   );
 }
 
+// ── LoadingSkeleton ───────────────────────────────────────────────────────────
+function LoadingSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '4px 16px' }}>
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div key={i} style={{
+          height: 40, borderRadius: 'var(--radius-sm)',
+          background: 'linear-gradient(90deg, var(--bg-raised) 25%, var(--bg-hover) 50%, var(--bg-raised) 75%)',
+          backgroundSize: '200% 100%',
+          animation: `shimmer 1.5s infinite ${i * 0.2}s`,
+          opacity: 0.6,
+        }} />
+      ))}
+      <div style={{ textAlign: 'center', paddingTop: 8, fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+        Cargando rack...
+      </div>
+    </div>
+  );
+}
+
 // ── ChannelRackPage ────────────────────────────────────────────────────────────
 interface Project { id: string; name: string; }
 
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
-  const [channels, setChannels] = useState(INITIAL_CHANNELS);
-  const [wsChannels, setWsChannels] = useState<any[]>([]);
+  const [channels, setChannels] = useState<Channel[]>([]);
   const [rackLoaded, setRackLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
-  const [bpm, setBpm] = useState(102);
+  const [bpm, setBpm] = useState(120);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepRef = useRef(-1);
+  const channelsRef = useRef<Channel[]>([]);
 
-  const updateWsChannel = useCallback((channelId: string, updater: (channel: any) => any) => {
-    setWsChannels(prev => prev.map(ch => (ch.id === channelId ? updater(ch) : ch)));
+  // Keep channelsRef in sync for use inside the sequencer interval
+  channelsRef.current = channels;
+
+  const sounds = useSounds();
+  const { loadSample, startSequencer: startAudio, stopSequencer: stopAudio } = useAudioEngine(bpm);
+
+  // Load audio samples when sounds are available
+  useEffect(() => {
+    sounds.forEach(sound => {
+      if (sound.blobUrl) {
+        loadSample(sound.id, sound.blobUrl).catch(() => {
+          // Silently ignore missing audio files
+        });
+      }
+    });
+  }, [sounds, loadSample]);
+
+  const updateChannel = useCallback((channelId: string, updater: (ch: Channel) => Channel) => {
+    setChannels(prev => prev.map(ch => ch.id === channelId ? updater(ch) : ch));
   }, []);
 
   const handleRackEvent = useCallback((event: any) => {
     switch (event.type) {
-      case 'RACK_STATE':
-        setWsChannels(event.payload.channels.map((ch: any) => ({
+      case 'RACK_STATE': {
+        const loaded: Channel[] = (event.payload.channels ?? []).map((ch: any) => ({
           id: ch.channelId,
           name: ch.name,
           soundId: ch.soundId,
-          volume: Math.round(ch.volume * 100),
-          isMute: !ch.active,
-          steps: Array.from(ch.steps as boolean[]),
-        })));
+          volume: Math.round((ch.volume ?? 1) * 100),
+          isMute: ch.active === false ? true : Boolean(ch.isMute ?? false),
+          steps: Array.from({ length: 16 }, (_, i) =>
+            Array.isArray(ch.steps) ? Boolean(ch.steps[i]) : false
+          ),
+        }));
+        setChannels(loaded);
         setRackLoaded(true);
         break;
+      }
+
       case 'CHANNEL_ADDED':
-        setWsChannels(prev => [...prev, {
+        setChannels(prev => [...prev, {
           id: event.payload.channelId,
           name: event.payload.name,
-          soundId: event.payload.soundId,
+          soundId: event.payload.soundId ?? '',
           volume: 80,
           isMute: false,
           steps: Array(16).fill(false),
         }]);
         break;
+
       case 'CHANNEL_REMOVED':
-        setWsChannels(prev => prev.filter(ch => ch.id !== event.payload.channelId));
+        setChannels(prev => prev.filter(ch => ch.id !== event.payload.channelId));
         break;
-      case 'STEP_TOGGLED':
-        setWsChannels(prev => prev.map(ch =>
-          ch.id === event.payload.channelId
-            ? {
-                ...ch,
-                steps: ch.steps.map((s: boolean, i: number) =>
-                  i === event.payload.stepIndex ? event.payload.newValue : s),
-              }
-            : ch,
-        ));
+
+      case 'STEP_TOGGLED': {
+        const { channelId, stepIndex, newValue } = event.payload;
+        updateChannel(channelId, ch => ({
+          ...ch,
+          steps: ch.steps.map((s, i) => i === stepIndex ? Boolean(newValue) : s),
+        }));
         break;
+      }
+
       case 'CHANNEL_MUTED':
       case 'MUTE_TOGGLED':
       case 'ChannelMuted':
       case 'CHANNEL_UPDATED':
       case 'ChannelUpdated': {
         const channelId = event.payload.channelId ?? event.payload.id;
-        const muteValue = event.payload.mute ?? event.payload.isMute;
-        const activeValue = event.payload.active;
-        if (channelId) {
-          updateWsChannel(channelId, (ch: any) => ({
-            ...ch,
-            isMute: typeof muteValue === 'boolean'
-              ? muteValue
-              : (typeof activeValue === 'boolean' ? !activeValue : ch.isMute),
-          }));
-        }
+        if (!channelId) break;
+        updateChannel(channelId, ch => {
+          const muteValue = event.payload.mute ?? event.payload.isMute;
+          const activeValue = event.payload.active;
+          const isMute = typeof muteValue === 'boolean'
+            ? muteValue
+            : typeof activeValue === 'boolean'
+              ? !activeValue
+              : !ch.isMute; // toggle if no explicit value
+          return { ...ch, isMute };
+        });
         break;
       }
+
       case 'CHANNEL_VOLUME_CHANGED':
       case 'VOLUME_CHANGED':
       case 'ChannelVolumeChanged': {
         const channelId = event.payload.channelId ?? event.payload.id;
-        if (channelId && typeof event.payload.volume === 'number') {
-          updateWsChannel(channelId, (ch: any) => ({
-            ...ch,
-            volume: event.payload.volume <= 1 ? Math.round(event.payload.volume * 100) : Math.round(event.payload.volume),
-          }));
-        }
+        if (!channelId || typeof event.payload.volume !== 'number') break;
+        const volume = event.payload.volume <= 1
+          ? Math.round(event.payload.volume * 100)
+          : Math.round(event.payload.volume);
+        updateChannel(channelId, ch => ({ ...ch, volume }));
         break;
       }
+
       default:
         break;
     }
-  }, [updateWsChannel]);
+  }, [updateChannel]);
 
-  const { toggleStep, addChannel, removeChannel, toggleMute: toggleMuteWs, setVolume } = useRackSocket(project.id, handleRackEvent);
-  const displayChannels = rackLoaded ? wsChannels : channels;
-  
+  const { toggleStep, addChannel, removeChannel, toggleMute, setVolume } = useRackSocket(project.id, handleRackEvent);
+
+  // ── Sequencer ──────────────────────────────────────────────────────────────
+  const stopSequencer = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    stopAudio();
+    stepRef.current = -1;
+    setCurrentStep(-1);
+  }, [stopAudio]);
 
   const startSequencer = useCallback(() => {
     const interval = (60 / bpm / 4) * 1000;
+    // Also start Tone.js audio sequencer
+    startAudio(channelsRef.current.map(ch => ({
+      id: ch.soundId,
+      steps: ch.steps.map((s) => s && !ch.isMute ? true : false),
+    })));
+
     intervalRef.current = setInterval(() => {
       stepRef.current = (stepRef.current + 1) % 16;
       setCurrentStep(stepRef.current);
     }, interval);
-  }, [bpm]);
-
-  const stopSequencer = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    stepRef.current = -1;
-    setCurrentStep(-1);
-  }, []);
+  }, [bpm, startAudio]);
 
   useEffect(() => {
-    if (isPlaying) { startSequencer(); }
-    else { stopSequencer(); }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+    if (isPlaying) {
+      startSequencer();
+    } else {
+      stopSequencer();
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
   }, [isPlaying, startSequencer, stopSequencer]);
 
-  const toggleMute = (channelId: string) => {
-    if (rackLoaded) {
-      toggleMuteWs(channelId);
-      return;
-    }
-    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, isMute: !ch.isMute } : ch));
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleToggleMute = (channelId: string) => {
+    toggleMute(channelId);
   };
 
   const handleVolumeChange = (channelId: string, volume: number) => {
-    if (rackLoaded) {
-      setVolume(channelId, volume);
-      return;
-    }
-    setChannels(prev => prev.map(ch => ch.id === channelId ? { ...ch, volume } : ch));
+    setVolume(channelId, volume);
+  };
+
+  const handleToggleStep = (channelId: string, stepIdx: number) => {
+    toggleStep(channelId, stepIdx);
+  };
+
+  const handleAddChannel = () => {
+    const name = `Canal ${channels.length + 1}`;
+    const defaultSoundId = sounds[0]?.id ?? 's1';
+    addChannel(name, defaultSoundId);
   };
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-void)' }}>
       <TransportBar
-        isPlaying={isPlaying} bpm={bpm}
+        isPlaying={isPlaying}
+        bpm={bpm}
         onPlay={() => setIsPlaying(p => !p)}
         onStop={() => { setIsPlaying(false); stopSequencer(); }}
         onBpmChange={setBpm}
@@ -225,45 +292,59 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <SoundLibrary sounds={MOCK_SOUNDS} />
+        <SoundLibrary sounds={sounds} />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 16, gap: 12 }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+
+            {/* Header */}
             <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--neon-violet)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon.Music /> Channel Rack
               </span>
+              {/* Beat markers */}
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
                 <div style={{ marginLeft: 168, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', flex: 1, gap: 3 }}>
-                  {[1, 2, 3, 4].map(beat => (
-                    <div key={beat} style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: currentStep >= (beat - 1) * 4 && currentStep < beat * 4 ? 'var(--neon-cyan)' : 'var(--text-muted)', fontWeight: currentStep >= (beat - 1) * 4 && currentStep < beat * 4 ? 700 : 400, paddingLeft: 4 }}>
-                      {beat}
-                    </div>
-                  ))}
+                  {[1, 2, 3, 4].map(beat => {
+                    const beatActive = isPlaying && currentStep >= (beat - 1) * 4 && currentStep < beat * 4;
+                    return (
+                      <div key={beat} style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: beatActive ? 'var(--neon-cyan)' : 'var(--text-muted)', fontWeight: beatActive ? 700 : 400, paddingLeft: 4 }}>
+                        {beat}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <button
                 className="btn btn-primary"
                 style={{ padding: '5px 10px', fontSize: 10 }}
-                onClick={() => addChannel(`Channel ${displayChannels.length + 1}`, 's1')}
+                onClick={handleAddChannel}
+                disabled={!rackLoaded}
               >
                 <Icon.Plus /> Canal
               </button>
             </div>
 
+            {/* Channel list */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '4px 16px' }}>
-              {displayChannels.length === 0 && (
+              {!rackLoaded && <LoadingSkeleton />}
+
+              {rackLoaded && channels.length === 0 && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                   <div style={{ fontSize: 32, opacity: 0.3 }}>♪</div>
                   <div>Arrastra un sonido o añade un canal</div>
                 </div>
               )}
-              {displayChannels.map((channel, i) => (
+
+              {rackLoaded && channels.map((channel, i) => (
                 <ChannelRow
-                  key={channel.id} channel={channel} currentStep={currentStep}
-                  isPlaying={isPlaying} index={i}
-                  onToggleStep={stepIdx => toggleStep(channel.id, stepIdx)}
-                  onMute={() => toggleMute(channel.id)}
+                  key={channel.id}
+                  channel={channel}
+                  currentStep={currentStep}
+                  isPlaying={isPlaying}
+                  index={i}
+                  onToggleStep={stepIdx => handleToggleStep(channel.id, stepIdx)}
+                  onMute={() => handleToggleMute(channel.id)}
                   onVolumeChange={v => handleVolumeChange(channel.id, v)}
                   onRemove={() => removeChannel(channel.id)}
                 />
@@ -271,9 +352,16 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
             </div>
           </div>
 
+          {/* Bottom panels */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flexShrink: 0 }}>
             <ActivityFeed activity={MOCK_ACTIVITY} />
-            <ProjectInfo name={project.name} bpm={bpm} collaborators={MOCK_COLLABORATORS} currentStep={currentStep} isPlaying={isPlaying} />
+            <ProjectInfo
+              name={project.name}
+              bpm={bpm}
+              collaborators={MOCK_COLLABORATORS}
+              currentStep={currentStep}
+              isPlaying={isPlaying}
+            />
           </div>
         </div>
       </div>
