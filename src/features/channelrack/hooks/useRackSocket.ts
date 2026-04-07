@@ -31,18 +31,30 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
         // Cargar estado inicial del rack
         client.publish({ destination: `/app/rack/${projectId}/load` });
       },
+      onStompError: (frame) => {
+        console.error('[STOMP Error]', frame.headers['message'], frame.body);
+      },
     });
     clientRef.current = client;
     client.activate();
 
     return () => {
-      client.publish({ destination: `/app/project/${projectId}/leave` });
+      if (client.connected) {
+        client.publish({ destination: `/app/project/${projectId}/leave` });
+      }
       client.deactivate();
+      clientRef.current = null;
     };
   }, [projectId]);
 
   const sendCommand = useCallback((destination: string, body?: object) => {
-    clientRef.current?.publish({
+    const client = clientRef.current;
+
+    if (!client?.connected) {
+      return;
+    }
+
+    client.publish({
       destination,
       body: body ? JSON.stringify(body) : undefined,
     });
