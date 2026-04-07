@@ -18,17 +18,16 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
       webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
       reconnectDelay: 3000,
       onConnect: () => {
-        // Suscribirse a eventos del rack del proyecto
         client.subscribe(`/topic/rack/${projectId}`, (msg) => {
           onEventRef.current(JSON.parse(msg.body));
         });
-        // Suscribirse a errores personales
         client.subscribe('/user/queue/errors', (msg) => {
           console.error('[WS Error]', msg.body);
         });
-        // Unirse al proyecto
+        client.subscribe('/user/queue/rack/state', (msg) => {
+          onEventRef.current(JSON.parse(msg.body));
+        });
         client.publish({ destination: `/app/project/${projectId}/join` });
-        // Cargar estado inicial del rack
         client.publish({ destination: `/app/rack/${projectId}/load` });
       },
       onStompError: (frame) => {
@@ -49,11 +48,10 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
 
   const sendCommand = useCallback((destination: string, body?: object) => {
     const client = clientRef.current;
-
     if (!client?.connected) {
+      console.warn('[WS] Not connected, dropping command to', destination);
       return;
     }
-
     client.publish({
       destination,
       body: body ? JSON.stringify(body) : undefined,
@@ -69,11 +67,29 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const removeChannel = (channelId: string) =>
     sendCommand(`/app/rack/${projectId}/channel/${channelId}/remove`);
 
-  const toggleMute = (channelId: string) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/mute`);
+  /** Mute/unmute: uses updateChannel because the backend has no dedicated mute endpoint */
+  const toggleMute = (channelId: string, currentlyMuted: boolean, name: string, soundId: string, volume: number) =>
+    sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
+      name,
+      soundId,
+      volume: volume / 100,
+      active: currentlyMuted, // flip: if currently muted (active=false) → set active=true
+    });
 
-  const setVolume = (channelId: string, volume: number) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/volume`, { volume: volume / 100 });
+  /** Volume: uses updateChannel because the backend has no dedicated volume endpoint */
+  const setVolume = (channelId: string, volume: number, name: string, soundId: string, active: boolean) =>
+    sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
+      name,
+      soundId,
+      volume: volume / 100,
+      active,
+    });
 
-  return { toggleStep, addChannel, removeChannel, toggleMute, setVolume };
+  const lockChannel = (channelId: string) =>
+    sendCommand(`/app/rack/${projectId}/channel/${channelId}/lock`);
+
+  const unlockChannel = (channelId: string) =>
+    sendCommand(`/app/rack/${projectId}/channel/${channelId}/unlock`);
+
+  return { toggleStep, addChannel, removeChannel, toggleMute, setVolume, lockChannel, unlockChannel };
 }

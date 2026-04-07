@@ -8,25 +8,27 @@ export interface Sound {
   blobUrl: string;
 }
 
-export function useSounds(): Sound[] {
+export function useSounds() {
   const [sounds, setSounds] = useState<Sound[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     apiClient.get('/api/sounds')
       .then(({ data }) => {
-        const list: any[] = data.data ?? data ?? [];
-        setSounds(list.map((s: any) => ({
-          id: s.soundId ?? s.id ?? '',
-          name: s.name ?? s.soundName ?? 'Sonido',
-          category: (s.category ?? s.type ?? 'OTROS').toUpperCase(),
-          blobUrl: s.blobUrl ?? s.url ?? s.fileUrl ?? '',
-        })));
+        setSounds(
+          data.data.map((s: any) => ({
+            id: s.soundId,
+            name: s.name,
+            category: s.category,
+            blobUrl: s.blobUrl,
+          }))
+        );
       })
-      .catch(err => {
-        console.warn('[useSounds] Could not load sounds from API:', err?.response?.status);
-        // Leave sounds as empty array — UI handles the empty state
-      });
+      .catch((err) => {
+        console.error('[useSounds] Failed to load sounds:', err);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  return sounds;
+  return { sounds, isLoading };
 }
