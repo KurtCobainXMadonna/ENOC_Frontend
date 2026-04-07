@@ -141,15 +141,18 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
 
 // ── ActivityFeed ──────────────────────────────────────────────────────────────
 function ActivityFeed({ activity }: { activity: Activity[] }) {
+  const visibleRows = 4;
+  const rowHeight = 32;
+
   return (
     <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: 16 }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--neon-violet)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
         <Icon.Users /> Actividad
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: visibleRows * rowHeight + (visibleRows - 1) * 8, overflowY: 'auto', paddingRight: 2 }}>
         {activity.length === 0 && <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>Sin actividad reciente</div>}
         {activity.map((item, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: rowHeight }}>
             <div style={{ width: 24, height: 24, borderRadius: '50%', background: `linear-gradient(135deg, ${item.color}, ${item.color}88)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>{item.avatar}</div>
             <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
               <span style={{ color: item.color }}>{item.user}</span> {item.action} <span style={{ color: 'var(--text-primary)' }}>{item.target}</span>
