@@ -21,10 +21,12 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
   const [projectName, setProjectName] = useState("Nuevo Beat");
   const [bpm, setBpm] = useState(120);
   const [inviteCode, setInviteCode] = useState("");
-  const { ownedProjects, collaboratingProjects, createProject, deleteProject } = useProjects();
+  const { ownedProjects, collaboratingProjects, createProject, deleteProject, joinProject } = useProjects();
   const projects = [...ownedProjects, ...collaboratingProjects];
   const [contextMenu, setContextMenu] = useState<string | null>(null);
   const contextMenuContainerRef = useRef<HTMLDivElement | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joinError, setJoinError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!contextMenu) {
@@ -52,6 +54,25 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
   const handleDelete = async (projectId: string) => {
     await deleteProject(projectId);
     setContextMenu(null);
+  };
+
+  const handleJoin = async () => {
+    if (!inviteCode.trim()) {
+      setJoinError('Ingresa un token de invitacion.');
+      return;
+    }
+
+    setIsJoining(true);
+    setJoinError(null);
+    try {
+      await joinProject(inviteCode);
+      setJoinOpen(false);
+      setInviteCode('');
+    } catch (err: any) {
+      setJoinError(err?.response?.data?.message ?? 'No se pudo unir al proyecto.');
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   return (
@@ -243,10 +264,21 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div>
             <label className="label">Código de invitación:</label>
-            <input className="input" placeholder="X7D1F9" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} style={{ textAlign: "center", fontSize: 20, letterSpacing: "0.2em", fontWeight: 700 }} />
+            <input
+              className="input"
+              placeholder="b1a3f7f4-9f11-46f1-ae6e-4ab8c8f77f22"
+              value={inviteCode}
+              onChange={e => setInviteCode(e.target.value)}
+              style={{ textAlign: "center", fontSize: 16, letterSpacing: "0.04em", fontWeight: 700 }}
+            />
           </div>
-          <button className="btn btn-secondary" style={{ width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }}>
-            Unirse al Proyecto
+          {joinError && (
+            <div style={{ fontSize: 12, color: "var(--neon-pink)", fontFamily: "var(--font-mono)", padding: "8px 12px", background: "rgba(255,45,107,0.1)", borderRadius: "var(--radius-md)" }}>
+              {joinError}
+            </div>
+          )}
+          <button className="btn btn-secondary" style={{ width: "100%", justifyContent: "center", padding: 12, marginTop: 4 }} onClick={handleJoin} disabled={isJoining}>
+            {isJoining ? 'Uniendo...' : 'Unirse al Proyecto'}
           </button>
           <div style={{ textAlign: "center", fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>
             ¿Nuevo en ZWING?{" "}

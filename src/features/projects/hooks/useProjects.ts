@@ -79,7 +79,13 @@ export function useProjects() {
     setOwnedProjects(prev => prev.filter(p => p.id !== projectId));
   };
 
+  const joinProject = async (inviteToken: string) => {
+    const token = inviteToken.trim().toLowerCase();
+    await apiClient.post('/api/invites/accept', null, { params: { token } });
+    await fetchProjects();
+  };
+
   useEffect(() => { fetchProjects(); }, []);
 
-  return { ownedProjects, collaboratingProjects, isLoading, error, createProject, deleteProject };
+  return { ownedProjects, collaboratingProjects, isLoading, error, createProject, deleteProject, joinProject };
 }
