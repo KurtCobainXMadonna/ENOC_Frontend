@@ -4,6 +4,7 @@ interface Collaborator { id: string; initial: string; color: string; name: strin
 
 interface TransportBarProps {
   isPlaying: boolean;
+  isRackLocked: boolean;
   bpm: number;
   onPlay: () => void;
   onStop: () => void;
@@ -14,7 +15,7 @@ interface TransportBarProps {
   onInvite: () => void;
 }
 
-export function TransportBar({ isPlaying, bpm, onPlay, onStop, onBpmChange, projectName, collaborators, onBack, onInvite }: TransportBarProps) {
+export function TransportBar({ isPlaying, isRackLocked, bpm, onPlay, onStop, onBpmChange, projectName, collaborators, onBack, onInvite }: TransportBarProps) {
   return (
     <div style={{ height: 52, background: 'var(--bg-deep)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', flexShrink: 0 }}>
       <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}>
@@ -36,8 +37,8 @@ export function TransportBar({ isPlaying, bpm, onPlay, onStop, onBpmChange, proj
         <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>BPM</span>
         <span style={{ fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--neon-cyan)', minWidth: 36, textAlign: 'center' }}>{bpm}</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <button onClick={() => onBpmChange(b => Math.min(240, b + 1))} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1, padding: '1px 4px', fontSize: 10 }}>▲</button>
-          <button onClick={() => onBpmChange(b => Math.max(40, b - 1))} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', lineHeight: 1, padding: '1px 4px', fontSize: 10 }}>▼</button>
+          <button disabled={isRackLocked} onClick={() => onBpmChange(b => Math.min(240, b + 1))} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: isRackLocked ? 'not-allowed' : 'pointer', opacity: isRackLocked ? 0.5 : 1, lineHeight: 1, padding: '1px 4px', fontSize: 10 }}>▲</button>
+          <button disabled={isRackLocked} onClick={() => onBpmChange(b => Math.max(40, b - 1))} style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: isRackLocked ? 'not-allowed' : 'pointer', opacity: isRackLocked ? 0.5 : 1, lineHeight: 1, padding: '1px 4px', fontSize: 10 }}>▼</button>
         </div>
       </div>
 

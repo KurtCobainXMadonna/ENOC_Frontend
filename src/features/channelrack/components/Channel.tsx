@@ -11,6 +11,7 @@ interface ChannelRowProps {
   channel: Channel;
   currentStep: number;
   isPlaying: boolean;
+  disabled: boolean;
   index: number;
   onToggleStep: (stepIdx: number) => void;
   onMute: () => void;
@@ -18,7 +19,7 @@ interface ChannelRowProps {
   onRemove: () => void;
 }
 
-export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMute, onVolumeChange, onRemove, index }: ChannelRowProps) {
+export function ChannelRow({ channel, currentStep, isPlaying, disabled, onToggleStep, onMute, onVolumeChange, onRemove, index }: ChannelRowProps) {
   const [_showVolume, setShowVolume] = useState(false);
 
   return (
@@ -40,6 +41,7 @@ export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMu
               min="0"
               max="100"
               value={channel.volume}
+              disabled={disabled}
               onChange={e => onVolumeChange(Number(e.target.value))}
               style={{
                 position: 'absolute',
@@ -47,7 +49,8 @@ export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMu
                 bottom: '32px',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                cursor: 'pointer',
+                cursor: disabled ? 'not-allowed' : 'pointer',
+                opacity: disabled ? 0.5 : 1,
               }}
             />
           )}
@@ -57,7 +60,7 @@ export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMu
         </span>
       </div>
 
-      <button onClick={onMute} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: channel.isMute ? 'rgba(255,45,107,0.2)' : 'var(--bg-raised)', color: channel.isMute ? 'var(--neon-pink)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
+      <button disabled={disabled} onClick={onMute} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: channel.isMute ? 'rgba(255,45,107,0.2)' : 'var(--bg-raised)', color: channel.isMute ? 'var(--neon-pink)' : 'var(--text-muted)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
         {channel.isMute ? <Icon.Mute /> : <Icon.Sound />}
       </button>
 
@@ -65,11 +68,11 @@ export function ChannelRow({ channel, currentStep, isPlaying, onToggleStep, onMu
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: 3 }}>
         {channel.steps.map((active, stepIdx) => (
-          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && Math.floor(stepIdx / 4) % 2 === 1} onClick={() => onToggleStep(stepIdx)} />
+          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && Math.floor(stepIdx / 4) % 2 === 1} disabled={disabled} onClick={() => onToggleStep(stepIdx)} />
         ))}
       </div>
 
-      <button onClick={onRemove} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+      <button disabled={disabled} onClick={onRemove} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-muted)', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,107,0.15)'; e.currentTarget.style.color = 'var(--neon-pink)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
       >

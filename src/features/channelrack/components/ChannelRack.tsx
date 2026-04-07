@@ -256,11 +256,8 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   // ── play / stop ───────────────────────────────────────────────────────────
   const audioStepRef = useRef(0);
 
-  const handlePlay = useCallback(async () => {
-    if (isPlaying) {
-      sequenceRef.current?.stop(); sequenceRef.current?.dispose(); sequenceRef.current = null;
-      Tone.getTransport().stop(); stopVisual(); setIsPlaying(false); return;
-    }
+  const startLocalPlayback = useCallback(async () => {
+    if (sequenceRef.current) return;
 
     await Tone.start();
     Tone.getTransport().bpm.value = bpm;
@@ -288,11 +285,15 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     Tone.getTransport().start();
     startVisual();
     setIsPlaying(true);
-  }, [isPlaying, bpm, startVisual, stopVisual]);
+  }, [bpm, startVisual]);
 
-  const handleStop = useCallback(() => {
-    sequenceRef.current?.stop(); sequenceRef.current?.dispose(); sequenceRef.current = null;
-    Tone.getTransport().stop(); stopVisual(); setIsPlaying(false);
+  const stopLocalPlayback = useCallback(() => {
+    sequenceRef.current?.stop();
+    sequenceRef.current?.dispose();
+    sequenceRef.current = null;
+    Tone.getTransport().stop();
+    stopVisual();
+    setIsPlaying(false);
   }, [stopVisual]);
 
   // ── WebSocket events ──────────────────────────────────────────────────────
@@ -344,10 +345,44 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         }
         break;
       }
+      case 'PLAYBACK_STARTED': {
+        void startLocalPlayback();
+        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: '#00F5D4' }, ...prev.slice(0, 9)]);
+        break;
+      }
+      case 'PLAYBACK_STOPPED': {
+        stopLocalPlayback();
+        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: '#FFB703' }, ...prev.slice(0, 9)]);
+        break;
+      }
     }
-  }, [sounds]);
+  }, [sounds, startLocalPlayback, stopLocalPlayback]);
 
-  const { toggleStep, addChannel, removeChannel, toggleMute, setVolume, setBpm: setRemoteBpm } = useRackSocket(project.id, handleRackEvent);
+  const {
+    toggleStep,
+    addChannel,
+    removeChannel,
+    toggleMute,
+    setVolume,
+    setBpm: setRemoteBpm,
+    startPlayback,
+    stopPlayback,
+  } = useRackSocket(project.id, handleRackEvent);
+
+  const isRackLocked = isPlaying;
+
+  const handlePlay = useCallback(() => {
+    if (isPlaying) {
+      return;
+    }
+
+    startPlayback();
+  }, [isPlaying, startPlayback]);
+
+  const handleStop = useCallback(() => {
+    stopPlayback();
+    stopLocalPlayback();
+  }, [stopPlayback, stopLocalPlayback]);
 
   const handleBpmChange = useCallback((fn: (b: number) => number) => {
     setBpm((prev) => {
@@ -376,7 +411,9 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-void)' }}>
       <TransportBar
-        isPlaying={isPlaying} bpm={bpm}
+        isPlaying={isPlaying}
+        isRackLocked={isRackLocked}
+        bpm={bpm}
         onPlay={handlePlay} onStop={handleStop}
         onBpmChange={handleBpmChange}
         projectName={project.name}
@@ -399,7 +436,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                   ))}
                 </div>
               </div>
-              <button className="btn btn-primary" style={{ padding: '5px 10px', fontSize: 10 }} onClick={() => { if (sounds.length === 0) { alert('Espera a que carguen los sonidos...'); return; } setAddModalOpen(true); }}>
+              <button className="btn btn-primary" disabled={isRackLocked} style={{ padding: '5px 10px', fontSize: 10, opacity: isRackLocked ? 0.6 : 1, cursor: isRackLocked ? 'not-allowed' : 'pointer' }} onClick={() => { if (isRackLocked) return; if (sounds.length === 0) { alert('Espera a que carguen los sonidos...'); return; } setAddModalOpen(true); }}>
                 <Icon.Plus /> Canal
               </button>
             </div>
@@ -418,11 +455,11 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                 </div>
               )}
               {rackLoaded && wsChannels.map((channel, i) => (
-                <ChannelRow key={channel.id} channel={channel} currentStep={currentStep} isPlaying={isPlaying} index={i}
-                  onToggleStep={stepIdx => toggleStep(channel.id, stepIdx)}
+                <ChannelRow key={channel.id} channel={channel} currentStep={currentStep} isPlaying={isPlaying} disabled={isRackLocked} index={i}
+                  onToggleStep={stepIdx => { if (isRackLocked) return; toggleStep(channel.id, stepIdx); }}
                   onMute={() => handleToggleMute(channel.id)}
                   onVolumeChange={v => handleVolumeChange(channel.id, v)}
-                  onRemove={() => removeChannel(channel.id)}
+                  onRemove={() => { if (isRackLocked) return; removeChannel(channel.id); }}
                 />
               ))}
             </div>
