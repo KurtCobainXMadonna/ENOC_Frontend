@@ -2,10 +2,11 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 let stompClient: Client | null = null;
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_BASE_URL;
 
 export function createStompClient(onConnect?: () => void): Client {
   const client = new Client({
-    webSocketFactory: () => new SockJS("http://localhost:8080/ws"),
+    webSocketFactory: () => new SockJS(`${WS_BASE_URL}/ws`),
     reconnectDelay: 3000,
     onConnect: () => {
       console.log("✅ Conectado al WebSocket");
