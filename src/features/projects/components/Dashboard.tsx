@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Icon } from '../../../shared/components/Icon';
 import { Modal } from '../../../shared/components/Modal';
 import { useProjects } from '../hooks/useProjects';
@@ -24,6 +24,23 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
   const { ownedProjects, collaboratingProjects, createProject, deleteProject } = useProjects();
   const projects = [...ownedProjects, ...collaboratingProjects];
   const [contextMenu, setContextMenu] = useState<string | null>(null);
+  const contextMenuContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (contextMenuContainerRef.current && !contextMenuContainerRef.current.contains(target)) {
+        setContextMenu(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [contextMenu]);
 
   const handleCreate = async () => {
     const newProject = await createProject(projectName);
@@ -85,7 +102,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
         </div>
 
         {/* Projects table */}
-        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "hidden" }}>
+        <div style={{ background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "var(--radius-lg)", overflow: "visible" }}>
           <div style={{
             display: "grid", gridTemplateColumns: "1fr auto auto auto",
             padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)",
@@ -141,7 +158,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
                 </div>
                 <span style={{ fontSize: 12, color: "var(--text-secondary)", fontFamily: "var(--font-mono)" }}>{project.owner}</span>
               </div>
-              <div style={{ position: "relative" }}>
+              <div style={{ position: "relative" }} ref={contextMenu === project.id ? contextMenuContainerRef : null}>
                 <button
                   onClick={e => { e.stopPropagation(); setContextMenu(contextMenu === project.id ? null : project.id); }}
                   style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px 8px", borderRadius: "var(--radius-sm)" }}
@@ -150,7 +167,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
                 </button>
                 {contextMenu === project.id && (
                   <div style={{
-                    position: "absolute", right: 0, top: "100%", zIndex: 100,
+                    position: "absolute", right: 0, bottom: "calc(100% + 8px)", zIndex: 200,
                     background: "var(--bg-card)", border: "1px solid var(--border-active)",
                     borderRadius: "var(--radius-md)", overflow: "hidden",
                     boxShadow: "0 16px 40px rgba(0,0,0,0.5)",
