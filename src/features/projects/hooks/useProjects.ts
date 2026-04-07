@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
 
-interface Project {
+export interface Project {
   id: string;
   name: string;
   owner: string;
   lastModified: string;
   isOwner: boolean;
+  // Raw backend fields for collaborator display
+  collaborators?: any[];
+  projectOwner?: any;
 }
 
 function toRelativeTime(dateStr?: string): string {
@@ -23,13 +26,15 @@ function toRelativeTime(dateStr?: string): string {
 }
 
 function mapProject(p: any, isOwner: boolean): Project {
-  // Support multiple possible field names from the backend
   return {
     id: p.projectId ?? p.id ?? '',
     name: p.projectName ?? p.name ?? 'Sin nombre',
     owner: p.projectOwner?.name ?? p.ownerName ?? p.owner ?? (isOwner ? 'Tú' : '?'),
     lastModified: toRelativeTime(p.updatedAt ?? p.lastModified ?? p.createdAt),
     isOwner,
+    // Preserve for ChannelRack collaborator display
+    collaborators: p.collaborators ?? [],
+    projectOwner: p.projectOwner ?? null,
   };
 }
 
@@ -44,21 +49,17 @@ export function useProjects() {
     setError(null);
     try {
       const { data } = await apiClient.get('/api/projects');
-      // Support both { data: { ownedProjects, collaboratingProjects } } and flat arrays
       const payload = data.data ?? data;
 
       if (Array.isArray(payload)) {
-        // Backend returned a flat list — infer ownership from a flag
-        const owned = payload.filter((p: any) => p.isOwner !== false && p.owner !== false);
-        const collab = payload.filter((p: any) => p.isOwner === false || p.owner === false);
-        setOwnedProjects(owned.map((p: any) => mapProject(p, true)));
-        setCollaboratingProjects(collab.map((p: any) => mapProject(p, false)));
+        setOwnedProjects(payload.filter((p: any) => p.isOwner !== false).map((p: any) => mapProject(p, true)));
+        setCollaboratingProjects(payload.filter((p: any) => p.isOwner === false).map((p: any) => mapProject(p, false)));
       } else {
         setOwnedProjects((payload.ownedProjects ?? []).map((p: any) => mapProject(p, true)));
         setCollaboratingProjects((payload.collaboratingProjects ?? []).map((p: any) => mapProject(p, false)));
       }
     } catch (err: any) {
-      console.error('[useProjects] fetchProjects failed:', err);
+      console.error('[useProjects] fetch failed:', err);
       setError(err?.response?.data?.message ?? 'Error al cargar proyectos');
     } finally {
       setIsLoading(false);
