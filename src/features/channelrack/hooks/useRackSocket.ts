@@ -14,8 +14,9 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   onEventRef.current = onEvent;
 
   useEffect(() => {
+    const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_BASE_URL;
     const client = new Client({
-      webSocketFactory: () => new SockJS('http://localhost:8080/ws'),
+      webSocketFactory: () => new SockJS(`${WS_BASE_URL}/ws`),
       reconnectDelay: 3000,
       onConnect: () => {
         client.subscribe(`/topic/rack/${projectId}`, (msg) => {
