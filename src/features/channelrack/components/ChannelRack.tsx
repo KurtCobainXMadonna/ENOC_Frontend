@@ -338,10 +338,24 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         }));
         break;
       }
+      case 'BPM_UPDATED': {
+        if (typeof payload.bpm === 'number') {
+          setBpm(payload.bpm);
+        }
+        break;
+      }
     }
   }, [sounds]);
 
-  const { toggleStep, addChannel, removeChannel, toggleMute, setVolume } = useRackSocket(project.id, handleRackEvent);
+  const { toggleStep, addChannel, removeChannel, toggleMute, setVolume, setBpm: setRemoteBpm } = useRackSocket(project.id, handleRackEvent);
+
+  const handleBpmChange = useCallback((fn: (b: number) => number) => {
+    setBpm((prev) => {
+      const next = fn(prev);
+      setRemoteBpm(next);
+      return next;
+    });
+  }, [setRemoteBpm]);
 
   // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
@@ -364,7 +378,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       <TransportBar
         isPlaying={isPlaying} bpm={bpm}
         onPlay={handlePlay} onStop={handleStop}
-        onBpmChange={setBpm}
+        onBpmChange={handleBpmChange}
         projectName={project.name}
         collaborators={collaborators}
         onBack={onBack}

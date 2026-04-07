@@ -91,5 +91,8 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const unlockChannel = (channelId: string) =>
     sendCommand(`/app/rack/${projectId}/channel/${channelId}/unlock`);
 
-  return { toggleStep, addChannel, removeChannel, toggleMute, setVolume, lockChannel, unlockChannel };
+  const setBpm = (bpm: number) =>
+    sendCommand(`/app/rack/${projectId}/bpm/update`, { bpm });
+
+  return { toggleStep, addChannel, removeChannel, toggleMute, setVolume, lockChannel, unlockChannel, setBpm };
 }
