@@ -209,6 +209,12 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     ...(project.collaborators ?? []).map((c: any, i: number) => ({ id: c.userId ?? c.id ?? String(i), name: c.name ?? c.email ?? 'Colaborador', initial: (c.name ?? c.email ?? 'C')[0].toUpperCase(), color: colorForIndex(i + 1) })),
   ];
 
+  // Get collaborator name by userId
+  const getCollaboratorName = useCallback((userId: string): string => {
+    const collab = collaborators.find(c => c.id === userId);
+    return collab?.name ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
+  }, [collaborators]);
+
   // ── Tone.js audio engine ──────────────────────────────────────────────────
   const playersRef = useRef<Map<string, Tone.Player>>(new Map());
   const sequenceRef = useRef<Tone.Sequence | null>(null);
@@ -299,6 +305,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   // ── WebSocket events ──────────────────────────────────────────────────────
   const handleRackEvent = useCallback((event: any) => {
     const payload = event.payload ?? event;
+    const userName = getCollaboratorName(event.triggeredBy);
 
     switch (event.type) {
       case 'RACK_STATE': {
@@ -311,13 +318,13 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       case 'CHANNEL_ADDED': {
         const ch = payload;
         setWsChannels(prev => [...prev, { id: ch.channelId, name: ch.name, soundId: ch.soundId, volume: Math.round((ch.volume ?? 1) * 100), isMute: ch.active === false, steps: normalizeSteps(ch.steps) }]);
-        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: '#9B5DE5' }, ...prev.slice(0, 9)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: '#9B5DE5' }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_REMOVED': {
         const channelId = payload.channelId ?? payload;
         setWsChannels(prev => prev.filter(c => c.id !== channelId));
-        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: '#FF2D6B' }, ...prev.slice(0, 9)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: '#FF2D6B' }, ...prev.slice(0, 3)]);
         break;
       }
       case 'STEP_TOGGLED': {
@@ -347,16 +354,16 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       }
       case 'PLAYBACK_STARTED': {
         void startLocalPlayback();
-        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: '#00F5D4' }, ...prev.slice(0, 9)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: '#00F5D4' }, ...prev.slice(0, 3)]);
         break;
       }
       case 'PLAYBACK_STOPPED': {
         stopLocalPlayback();
-        setActivity(prev => [{ user: event.triggeredBy ?? 'Alguien', avatar: (event.triggeredBy ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: '#FFB703' }, ...prev.slice(0, 9)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: '#FFB703' }, ...prev.slice(0, 3)]);
         break;
       }
     }
-  }, [sounds, startLocalPlayback, stopLocalPlayback]);
+  }, [sounds, startLocalPlayback, stopLocalPlayback, getCollaboratorName]);
 
   const {
     toggleStep,
