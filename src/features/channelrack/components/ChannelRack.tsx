@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import * as Tone from 'tone';
 import { Icon } from '../../../shared/components/Icon';
 import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
@@ -7,6 +6,8 @@ import { ChannelRow } from './Channel';
 import { useRackSocket } from '../hooks/useRackSocket';
 import { useSounds } from '../hooks/useSounds';
 import { apiClient } from '../../../shared/api/client';
+import { useAuthStore } from '../../auth/store/authStore';
+import { useAudioEngine } from '../hooks/useAudioEngine';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
@@ -194,7 +195,10 @@ interface Project { id: string; name: string; collaborators?: any[]; projectOwne
 
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
   const { sounds } = useSounds();
+  const user = useAuthStore((state) => state.user);
+  const { startLoop, stopLoop, updateLoopData } = useAudioEngine();
   const [wsChannels, setWsChannels] = useState<WsChannel[]>([]);
+  const [channelLocks, setChannelLocks] = useState<Record<string, string>>({});
   const [rackLoaded, setRackLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -215,35 +219,19 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     return collab?.name ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
   }, [collaborators]);
 
-  // ── Tone.js audio engine ──────────────────────────────────────────────────
-  const playersRef = useRef<Map<string, Tone.Player>>(new Map());
-  const sequenceRef = useRef<Tone.Sequence | null>(null);
-  const wsChannelsRef = useRef<WsChannel[]>([]);
-  wsChannelsRef.current = wsChannels;
-
-  // Load players when channels or sounds load
   useEffect(() => {
-    if (sounds.length === 0 || wsChannels.length === 0) return;
-    const soundMap = new Map(sounds.map(s => [s.id, s.blobUrl]));
-    wsChannels.forEach(ch => {
-      if (playersRef.current.has(ch.id)) return;
-      const url = soundMap.get(ch.soundId);
-      if (!url) return;
-      try { playersRef.current.set(ch.id, new Tone.Player(url).toDestination()); }
-      catch (e) { console.warn('[Audio] load failed', ch.id, e); }
-    });
-    // Remove stale players
-    const ids = new Set(wsChannels.map(c => c.id));
-    playersRef.current.forEach((_, id) => { if (!ids.has(id)) { playersRef.current.get(id)?.dispose(); playersRef.current.delete(id); } });
-  }, [wsChannels, sounds]);
-
-  // Cleanup on unmount
-  useEffect(() => () => {
-    sequenceRef.current?.dispose();
-    Tone.getTransport().stop();
-    playersRef.current.forEach(p => p.dispose());
-    playersRef.current.clear();
-  }, []);
+    const soundUrlMap = new Map(sounds.map((s) => [s.id, s.blobUrl]));
+    updateLoopData(
+      wsChannels.map((ch) => ({
+        channelId: ch.id,
+        soundId: ch.soundId,
+        active: !ch.isMute,
+        volume: ch.volume / 100,
+        steps: ch.steps,
+      })),
+      soundUrlMap
+    );
+  }, [sounds, wsChannels, updateLoopData]);
 
   // ── visual step sequencer ─────────────────────────────────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -260,47 +248,17 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   }, []);
 
   // ── play / stop ───────────────────────────────────────────────────────────
-  const audioStepRef = useRef(0);
-
-  const startLocalPlayback = useCallback(async () => {
-    if (sequenceRef.current) return;
-
-    await Tone.start();
-    Tone.getTransport().bpm.value = bpm;
-    audioStepRef.current = 0;
-
-    sequenceRef.current = new Tone.Sequence(
-      (time) => {
-        const step = audioStepRef.current;
-        wsChannelsRef.current.forEach(ch => {
-          if (ch.isMute || !ch.steps[step]) return;
-          const player = playersRef.current.get(ch.id);
-          if (player?.loaded) {
-            try {
-              player.volume.value = Tone.gainToDb(ch.volume / 100);
-              player.start(time);
-            } catch (_) { /* player may not be ready */ }
-          }
-        });
-        audioStepRef.current = (step + 1) % 16;
-      },
-      [0], '16n'
-    );
-
-    sequenceRef.current.start(0);
-    Tone.getTransport().start();
+  const startLocalPlayback = useCallback(() => {
+    startLoop(bpm);
     startVisual();
     setIsPlaying(true);
-  }, [bpm, startVisual]);
+  }, [bpm, startLoop, startVisual]);
 
   const stopLocalPlayback = useCallback(() => {
-    sequenceRef.current?.stop();
-    sequenceRef.current?.dispose();
-    sequenceRef.current = null;
-    Tone.getTransport().stop();
+    stopLoop();
     stopVisual();
     setIsPlaying(false);
-  }, [stopVisual]);
+  }, [stopLoop, stopVisual]);
 
   // ── WebSocket events ──────────────────────────────────────────────────────
   const handleRackEvent = useCallback((event: any) => {
@@ -311,6 +269,10 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       case 'RACK_STATE': {
         const rack = payload.rack ?? payload;
         setWsChannels((rack.channels ?? []).map((ch: any) => ({ id: ch.channelId, name: ch.name, soundId: ch.soundId, volume: Math.round((ch.volume ?? 1) * 100), isMute: ch.active === false, steps: normalizeSteps(ch.steps) })));
+        setChannelLocks((prev) => {
+          const channelIds = new Set((rack.channels ?? []).map((ch: any) => String(ch.channelId)));
+          return Object.fromEntries(Object.entries(prev).filter(([channelId]) => channelIds.has(channelId)));
+        });
         if (rack.bpm) setBpm(rack.bpm);
         setRackLoaded(true);
         break;
@@ -324,7 +286,27 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       case 'CHANNEL_REMOVED': {
         const channelId = payload.channelId ?? payload;
         setWsChannels(prev => prev.filter(c => c.id !== channelId));
+        setChannelLocks(prev => {
+          const { [String(channelId)]: _, ...rest } = prev;
+          return rest;
+        });
         setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        break;
+      }
+      case 'CHANNEL_LOCKED': {
+        const channelId = String(payload.channelId);
+        const lockHolder = payload.lockedByEmail ?? payload.lockedByUserId ?? 'otro usuario';
+        setChannelLocks(prev => ({ ...prev, [channelId]: String(lockHolder) }));
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        break;
+      }
+      case 'CHANNEL_UNLOCKED': {
+        const channelId = String(payload.channelId);
+        setChannelLocks(prev => {
+          const { [channelId]: _, ...rest } = prev;
+          return rest;
+        });
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'desbloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#06D6A0' }, ...prev.slice(0, 3)]);
         break;
       }
       case 'STEP_TOGGLED': {
@@ -336,13 +318,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         const ch = payload;
         setWsChannels(prev => prev.map(c => {
           if (c.id !== ch.channelId) return c;
-          const updated = { ...c, name: ch.name ?? c.name, soundId: ch.soundId ?? c.soundId, volume: ch.volume != null ? Math.round(ch.volume * 100) : c.volume, isMute: ch.active != null ? !ch.active : c.isMute, steps: ch.steps ? normalizeSteps(ch.steps) : c.steps };
-          // Reload player if sound changed
-          if (ch.soundId && ch.soundId !== c.soundId) {
-            const newSound = sounds.find(s => s.id === ch.soundId);
-            if (newSound?.blobUrl) { playersRef.current.get(c.id)?.dispose(); try { playersRef.current.set(c.id, new Tone.Player(newSound.blobUrl).toDestination()); } catch (_) {} }
-          }
-          return updated;
+          return { ...c, name: ch.name ?? c.name, soundId: ch.soundId ?? c.soundId, volume: ch.volume != null ? Math.round(ch.volume * 100) : c.volume, isMute: ch.active != null ? !ch.active : c.isMute, steps: ch.steps ? normalizeSteps(ch.steps) : c.steps };
         }));
         break;
       }
@@ -363,7 +339,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         break;
       }
     }
-  }, [sounds, startLocalPlayback, stopLocalPlayback, getCollaboratorName]);
+  }, [startLocalPlayback, stopLocalPlayback, getCollaboratorName]);
 
   const {
     toggleStep,
@@ -371,6 +347,8 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     removeChannel,
     toggleMute,
     setVolume,
+    lockChannel,
+    unlockChannel,
     setBpm: setRemoteBpm,
     startPlayback,
     stopPlayback,
@@ -399,19 +377,32 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     });
   }, [setRemoteBpm]);
 
+  const withChannelLock = useCallback((channelId: string, action: () => void) => {
+    lockChannel(channelId);
+    try {
+      action();
+    } finally {
+      unlockChannel(channelId);
+    }
+  }, [lockChannel, unlockChannel]);
+
   // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
-    setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, isMute: !c.isMute } : c));
-    toggleMute(channelId, ch.isMute, ch.volume);
+    withChannelLock(channelId, () => {
+      setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, isMute: !c.isMute } : c));
+      toggleMute(channelId, ch.isMute, ch.volume);
+    });
   };
 
   const handleVolumeChange = (channelId: string, volume: number) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
-    setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, volume } : c));
-    setVolume(channelId, volume, !ch.isMute);
+    withChannelLock(channelId, () => {
+      setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, volume } : c));
+      setVolume(channelId, volume, !ch.isMute);
+    });
   };
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -462,11 +453,27 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                 </div>
               )}
               {rackLoaded && wsChannels.map((channel, i) => (
-                <ChannelRow key={channel.id} channel={channel} currentStep={currentStep} isPlaying={isPlaying} disabled={isRackLocked} index={i}
-                  onToggleStep={stepIdx => { if (isRackLocked) return; toggleStep(channel.id, stepIdx); }}
+                <ChannelRow
+                  key={channel.id}
+                  channel={channel}
+                  currentStep={currentStep}
+                  isPlaying={isPlaying}
+                  disabled={isRackLocked}
+                  lockedByOther={!!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email}
+                  lockHolder={channelLocks[channel.id]}
+                  index={i}
+                  onToggleStep={stepIdx => {
+                    const lockedByOther = !!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email;
+                    if (isRackLocked || lockedByOther) return;
+                    withChannelLock(channel.id, () => toggleStep(channel.id, stepIdx));
+                  }}
                   onMute={() => handleToggleMute(channel.id)}
                   onVolumeChange={v => handleVolumeChange(channel.id, v)}
-                  onRemove={() => { if (isRackLocked) return; removeChannel(channel.id); }}
+                  onRemove={() => {
+                    const lockedByOther = !!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email;
+                    if (isRackLocked || lockedByOther) return;
+                    withChannelLock(channel.id, () => removeChannel(channel.id));
+                  }}
                 />
               ))}
             </div>

@@ -2,9 +2,21 @@ import { useEffect, useRef, useCallback } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
+export interface StepToggledPayload {
+  channelId: string;
+  stepIndex: number;
+  newValue: boolean;
+}
+
+export interface ChannelLockPayload {
+  channelId: string;
+  lockedByUserId: string;
+  lockedByEmail: string;
+}
+
 interface RackEvent {
   type: string;
-  payload: any;
+  payload: unknown;
   triggeredBy: string;
 }
 
@@ -20,13 +32,21 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
       reconnectDelay: 3000,
       onConnect: () => {
         client.subscribe(`/topic/rack/${projectId}`, (msg) => {
-          onEventRef.current(JSON.parse(msg.body));
+          try {
+            onEventRef.current(JSON.parse(msg.body));
+          } catch (err) {
+            console.error('[WS Parse Error] rack topic', err);
+          }
         });
         client.subscribe('/user/queue/errors', (msg) => {
           console.error('[WS Error]', msg.body);
         });
         client.subscribe('/user/queue/rack/state', (msg) => {
-          onEventRef.current(JSON.parse(msg.body));
+          try {
+            onEventRef.current(JSON.parse(msg.body));
+          } catch (err) {
+            console.error('[WS Parse Error] rack state', err);
+          }
         });
         client.publish({ destination: `/app/project/${projectId}/join` });
         client.publish({ destination: `/app/rack/${projectId}/load` });
