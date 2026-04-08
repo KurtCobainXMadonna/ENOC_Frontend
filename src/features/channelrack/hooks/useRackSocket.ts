@@ -68,20 +68,16 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const removeChannel = (channelId: string) =>
     sendCommand(`/app/rack/${projectId}/channel/${channelId}/remove`);
 
-  /** Mute/unmute: uses updateChannel because the backend has no dedicated mute endpoint */
-  const toggleMute = (channelId: string, currentlyMuted: boolean, name: string, soundId: string, volume: number) =>
+  /** Mute/unmute: send only mutable fields so the backend does not require a lock */
+  const toggleMute = (channelId: string, currentlyMuted: boolean, volume: number) =>
     sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
-      name,
-      soundId,
       volume: volume / 100,
       active: currentlyMuted, // flip: if currently muted (active=false) → set active=true
     });
 
-  /** Volume: uses updateChannel because the backend has no dedicated volume endpoint */
-  const setVolume = (channelId: string, volume: number, name: string, soundId: string, active: boolean) =>
+  /** Volume: send only mutable fields so the backend does not require a lock */
+  const setVolume = (channelId: string, volume: number, active: boolean) =>
     sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
-      name,
-      soundId,
       volume: volume / 100,
       active,
     });
