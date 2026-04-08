@@ -404,14 +404,14 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
     setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, isMute: !c.isMute } : c));
-    toggleMute(channelId, ch.isMute, ch.name, ch.soundId, ch.volume);
+    toggleMute(channelId, ch.isMute, ch.volume);
   };
 
   const handleVolumeChange = (channelId: string, volume: number) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
     setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, volume } : c));
-    setVolume(channelId, volume, ch.name, ch.soundId, !ch.isMute);
+    setVolume(channelId, volume, !ch.isMute);
   };
 
   // ── render ────────────────────────────────────────────────────────────────
