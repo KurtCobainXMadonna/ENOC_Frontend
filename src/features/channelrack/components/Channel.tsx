@@ -23,7 +23,8 @@ interface ChannelRowProps {
 
 export function ChannelRow({ channel, currentStep, isPlaying, disabled, lockedByOther = false, lockHolder, onToggleStep, onMute, onVolumeChange, onRemove, index }: ChannelRowProps) {
   const [_showVolume, setShowVolume] = useState(false);
-  const channelDisabled = disabled || lockedByOther;
+  const channelEditDisabled = disabled || lockedByOther;
+  const channelMixDisabled = disabled;
 
   return (
     <div style={{
@@ -46,7 +47,7 @@ export function ChannelRow({ channel, currentStep, isPlaying, disabled, lockedBy
               min="0"
               max="100"
               value={channel.volume}
-              disabled={channelDisabled}
+              disabled={channelMixDisabled}
               onChange={e => onVolumeChange(Number(e.target.value))}
               style={{
                 position: 'absolute',
@@ -54,8 +55,8 @@ export function ChannelRow({ channel, currentStep, isPlaying, disabled, lockedBy
                 bottom: '32px',
                 left: '50%',
                 transform: 'translateX(-50%)',
-                cursor: channelDisabled ? 'not-allowed' : 'pointer',
-                opacity: channelDisabled ? 0.5 : 1,
+                cursor: channelMixDisabled ? 'not-allowed' : 'pointer',
+                opacity: channelMixDisabled ? 0.5 : 1,
               }}
             />
           )}
@@ -72,7 +73,7 @@ export function ChannelRow({ channel, currentStep, isPlaying, disabled, lockedBy
         </div>
       </div>
 
-      <button disabled={channelDisabled} onClick={onMute} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: channel.isMute ? 'rgba(255,45,107,0.2)' : 'var(--bg-raised)', color: channel.isMute ? 'var(--neon-pink)' : 'var(--text-muted)', cursor: channelDisabled ? 'not-allowed' : 'pointer', opacity: channelDisabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
+      <button disabled={channelMixDisabled} onClick={onMute} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: channel.isMute ? 'rgba(255,45,107,0.2)' : 'var(--bg-raised)', color: channel.isMute ? 'var(--neon-pink)' : 'var(--text-muted)', cursor: channelMixDisabled ? 'not-allowed' : 'pointer', opacity: channelMixDisabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}>
         {channel.isMute ? <Icon.Mute /> : <Icon.Sound />}
       </button>
 
@@ -80,11 +81,11 @@ export function ChannelRow({ channel, currentStep, isPlaying, disabled, lockedBy
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(16, 1fr)', gap: 3 }}>
         {channel.steps.map((active, stepIdx) => (
-          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && Math.floor(stepIdx / 4) % 2 === 1} disabled={channelDisabled} onClick={() => onToggleStep(stepIdx)} />
+          <StepButton key={stepIdx} active={active} beat={stepIdx % 4 === 0} playing={isPlaying && currentStep === stepIdx} accent={active && Math.floor(stepIdx / 4) % 2 === 1} disabled={channelEditDisabled} onClick={() => onToggleStep(stepIdx)} />
         ))}
       </div>
 
-      <button disabled={channelDisabled} onClick={onRemove} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-muted)', cursor: channelDisabled ? 'not-allowed' : 'pointer', opacity: channelDisabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
+      <button disabled={channelEditDisabled} onClick={onRemove} style={{ width: 28, height: 28, border: 'none', borderRadius: 'var(--radius-sm)', background: 'transparent', color: 'var(--text-muted)', cursor: channelEditDisabled ? 'not-allowed' : 'pointer', opacity: channelEditDisabled ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', flexShrink: 0 }}
         onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,45,107,0.15)'; e.currentTarget.style.color = 'var(--neon-pink)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-muted)'; }}
       >

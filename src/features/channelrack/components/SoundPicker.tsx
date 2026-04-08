@@ -3,7 +3,7 @@ import { Icon } from '../../../shared/components/Icon';
 
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
 
-export function SoundLibrary({ sounds }: { sounds: Sound[] }) {
+export function SoundLibrary({ sounds, onPreviewSound }: { sounds: Sound[]; onPreviewSound?: (url: string) => void }) {
   const [search, setSearch] = useState('');
   const filtered = sounds.filter(s => s.name.toLowerCase().includes(search.toLowerCase()));
   const categories = [...new Set(filtered.map(s => s.category))];
@@ -25,7 +25,8 @@ export function SoundLibrary({ sounds }: { sounds: Sound[] }) {
             <div style={{ padding: '4px 12px', fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>{cat}</div>
             {filtered.filter(s => s.category === cat).map(sound => (
               <div key={sound.id} draggable onDragStart={e => e.dataTransfer.setData('soundId', sound.id)}
-                style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'grab', transition: 'background 0.12s' }}
+                onClick={() => onPreviewSound?.(sound.blobUrl)}
+                style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', transition: 'background 0.12s' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
               >
@@ -36,6 +37,17 @@ export function SoundLibrary({ sounds }: { sounds: Sound[] }) {
                   <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sound.name}</div>
                   <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>.wav</div>
                 </div>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  style={{ marginLeft: 'auto', padding: '3px 8px', fontSize: 10 }}
+                  onClick={e => {
+                    e.stopPropagation();
+                    onPreviewSound?.(sound.blobUrl);
+                  }}
+                >
+                  <Icon.Play />
+                </button>
               </div>
             ))}
           </div>

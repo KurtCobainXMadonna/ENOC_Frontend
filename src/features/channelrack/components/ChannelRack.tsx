@@ -196,7 +196,7 @@ interface Project { id: string; name: string; collaborators?: any[]; projectOwne
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
   const { sounds } = useSounds();
   const user = useAuthStore((state) => state.user);
-  const { startLoop, stopLoop, updateLoopData } = useAudioEngine();
+  const { startLoop, stopLoop, updateLoopData, previewSound } = useAudioEngine();
   const [wsChannels, setWsChannels] = useState<WsChannel[]>([]);
   const [channelLocks, setChannelLocks] = useState<Record<string, string>>({});
   const [rackLoaded, setRackLoaded] = useState(false);
@@ -295,7 +295,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       }
       case 'CHANNEL_LOCKED': {
         const channelId = String(payload.channelId);
-        const lockHolder = payload.lockedByEmail ?? payload.lockedByUserId ?? 'otro usuario';
+        const lockHolder = String(payload.lockedByEmail ?? payload.lockedByUserId ?? '');
         setChannelLocks(prev => ({ ...prev, [channelId]: String(lockHolder) }));
         setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#FF2D6B' }, ...prev.slice(0, 3)]);
         break;
@@ -386,23 +386,28 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     }
   }, [lockChannel, unlockChannel]);
 
+  const isLockedByOther = useCallback((channelId: string) => {
+    const holderRaw = channelLocks[channelId];
+    if (!holderRaw) return false;
+    const holder = String(holderRaw).trim().toLowerCase();
+    const myEmail = user?.email?.trim().toLowerCase();
+    if (!myEmail) return true;
+    return holder !== myEmail;
+  }, [channelLocks, user?.email]);
+
   // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
-    withChannelLock(channelId, () => {
-      setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, isMute: !c.isMute } : c));
-      toggleMute(channelId, ch.isMute, ch.volume);
-    });
+    setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, isMute: !c.isMute } : c));
+    toggleMute(channelId, ch.isMute, ch.volume);
   };
 
   const handleVolumeChange = (channelId: string, volume: number) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
-    withChannelLock(channelId, () => {
-      setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, volume } : c));
-      setVolume(channelId, volume, !ch.isMute);
-    });
+    setWsChannels(prev => prev.map(c => c.id === channelId ? { ...c, volume } : c));
+    setVolume(channelId, volume, !ch.isMute);
   };
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -421,7 +426,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <SoundLibrary sounds={sounds} />
+        <SoundLibrary sounds={sounds} onPreviewSound={previewSound} />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 16, gap: 12 }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
@@ -459,18 +464,18 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                   currentStep={currentStep}
                   isPlaying={isPlaying}
                   disabled={isRackLocked}
-                  lockedByOther={!!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email}
+                  lockedByOther={isLockedByOther(channel.id)}
                   lockHolder={channelLocks[channel.id]}
                   index={i}
                   onToggleStep={stepIdx => {
-                    const lockedByOther = !!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email;
+                    const lockedByOther = isLockedByOther(channel.id);
                     if (isRackLocked || lockedByOther) return;
                     withChannelLock(channel.id, () => toggleStep(channel.id, stepIdx));
                   }}
                   onMute={() => handleToggleMute(channel.id)}
                   onVolumeChange={v => handleVolumeChange(channel.id, v)}
                   onRemove={() => {
-                    const lockedByOther = !!channelLocks[channel.id] && channelLocks[channel.id] !== user?.email;
+                    const lockedByOther = isLockedByOther(channel.id);
                     if (isRackLocked || lockedByOther) return;
                     withChannelLock(channel.id, () => removeChannel(channel.id));
                   }}
