@@ -17,6 +17,11 @@ interface WsChannel {
   volume: number; isMute: boolean; steps: boolean[];
 }
 
+interface ChannelLockState {
+  lockedByUserId?: string;
+  lockedByEmail?: string;
+}
+
 interface Collaborator { id: string; initial: string; color: string; name: string; }
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
 
@@ -198,7 +203,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   const user = useAuthStore((state) => state.user);
   const { startLoop, stopLoop, updateLoopData, previewSound } = useAudioEngine();
   const [wsChannels, setWsChannels] = useState<WsChannel[]>([]);
-  const [channelLocks, setChannelLocks] = useState<Record<string, string>>({});
+  const [channelLocks, setChannelLocks] = useState<Record<string, ChannelLockState>>({});
   const [rackLoaded, setRackLoaded] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
@@ -206,6 +211,8 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const myHeldLocksRef = useRef<Set<string>>(new Set());
+  const unlockTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   // Build collaborators list from project data
   const collaborators: Collaborator[] = [
@@ -295,13 +302,24 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       }
       case 'CHANNEL_LOCKED': {
         const channelId = String(payload.channelId);
-        const lockHolder = String(payload.lockedByEmail ?? payload.lockedByUserId ?? '');
-        setChannelLocks(prev => ({ ...prev, [channelId]: String(lockHolder) }));
+        setChannelLocks(prev => ({
+          ...prev,
+          [channelId]: {
+            lockedByEmail: payload.lockedByEmail,
+            lockedByUserId: payload.lockedByUserId,
+          },
+        }));
         setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#FF2D6B' }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_UNLOCKED': {
         const channelId = String(payload.channelId);
+        const timer = unlockTimersRef.current.get(channelId);
+        if (timer) {
+          clearTimeout(timer);
+          unlockTimersRef.current.delete(channelId);
+        }
+        myHeldLocksRef.current.delete(channelId);
         setChannelLocks(prev => {
           const { [channelId]: _, ...rest } = prev;
           return rest;
@@ -377,23 +395,83 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     });
   }, [setRemoteBpm]);
 
-  const withChannelLock = useCallback((channelId: string, action: () => void) => {
-    lockChannel(channelId);
-    try {
-      action();
-    } finally {
-      unlockChannel(channelId);
-    }
-  }, [lockChannel, unlockChannel]);
+  const clearUnlockTimer = useCallback((channelId: string) => {
+    const timer = unlockTimersRef.current.get(channelId);
+    if (!timer) return;
+    clearTimeout(timer);
+    unlockTimersRef.current.delete(channelId);
+  }, []);
 
   const isLockedByOther = useCallback((channelId: string) => {
-    const holderRaw = channelLocks[channelId];
-    if (!holderRaw) return false;
-    const holder = String(holderRaw).trim().toLowerCase();
+    const lock = channelLocks[channelId];
+    if (!lock) return false;
+
+    const holderEmail = lock.lockedByEmail?.trim().toLowerCase();
     const myEmail = user?.email?.trim().toLowerCase();
-    if (!myEmail) return true;
-    return holder !== myEmail;
+
+    if (holderEmail && myEmail) {
+      return holderEmail !== myEmail;
+    }
+
+    // If no comparable email is present, prefer not blocking to avoid false positives.
+    return false;
   }, [channelLocks, user?.email]);
+
+  const scheduleUnlock = useCallback((channelId: string, delayMs = 30000) => {
+    clearUnlockTimer(channelId);
+    const timer = setTimeout(() => {
+      unlockChannel(channelId);
+      myHeldLocksRef.current.delete(channelId);
+      setChannelLocks((prev) => {
+        const lock = prev[channelId];
+        const myEmail = user?.email?.trim().toLowerCase();
+        const holderEmail = lock?.lockedByEmail?.trim().toLowerCase();
+        if (!lock || (holderEmail && myEmail && holderEmail !== myEmail)) {
+          return prev;
+        }
+        const { [channelId]: _, ...rest } = prev;
+        return rest;
+      });
+      unlockTimersRef.current.delete(channelId);
+    }, delayMs);
+
+    unlockTimersRef.current.set(channelId, timer);
+  }, [clearUnlockTimer, unlockChannel, user?.email]);
+
+  const withChannelLock = useCallback((channelId: string, action: () => void) => {
+    if (isLockedByOther(channelId)) {
+      return;
+    }
+
+    if (!myHeldLocksRef.current.has(channelId)) {
+      lockChannel(channelId);
+      myHeldLocksRef.current.add(channelId);
+      if (user?.email) {
+        setChannelLocks((prev) => ({
+          ...prev,
+          [channelId]: {
+            lockedByEmail: user.email,
+            lockedByUserId: prev[channelId]?.lockedByUserId,
+          },
+        }));
+      }
+    }
+
+    action();
+    scheduleUnlock(channelId);
+  }, [isLockedByOther, lockChannel, scheduleUnlock, user?.email]);
+
+  useEffect(() => {
+    return () => {
+      unlockTimersRef.current.forEach((timer) => clearTimeout(timer));
+      unlockTimersRef.current.clear();
+
+      myHeldLocksRef.current.forEach((channelId) => {
+        unlockChannel(channelId);
+      });
+      myHeldLocksRef.current.clear();
+    };
+  }, [unlockChannel]);
 
   // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
@@ -465,7 +543,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
                   isPlaying={isPlaying}
                   disabled={isRackLocked}
                   lockedByOther={isLockedByOther(channel.id)}
-                  lockHolder={channelLocks[channel.id]}
+                  lockHolder={channelLocks[channel.id]?.lockedByEmail ?? channelLocks[channel.id]?.lockedByUserId}
                   index={i}
                   onToggleStep={stepIdx => {
                     const lockedByOther = isLockedByOther(channel.id);
