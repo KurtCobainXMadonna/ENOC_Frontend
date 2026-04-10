@@ -86,9 +86,10 @@ ZWING es una aplicación web de producción musical colaborativa que permite a m
 
 ### 🪈 Prerrequisitos
 
-- Node.js >= 20.19.0
-- npm
-
+```
+  Node.js >= 20.19.0
+  npm
+```
 ### 🩴 Pasos
 
 ```bash
