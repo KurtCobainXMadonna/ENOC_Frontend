@@ -54,29 +54,31 @@ ZWING es una aplicación web de producción musical colaborativa que permite a m
 ---
 
 ## 📁 Estructura del Proyecto
-src/
-├── app/
-│   ├── App.tsx               # Enrutamiento interno (login → dashboard → rack)
-│   └── routes.tsx            # Tipos de vista
-├── features/
-│   ├── auth/
-│   │   ├── components/       # LoginPage con Google Sign-In
-│   │   ├── hooks/            # useGoogleAuth
-│   │   └── store/            # authStore (Zustand)
-│   ├── channelrack/
-│   │   ├── components/       # ChannelRack, Channel, TransportBar, SoundPicker, StepGrid
-│   │   ├── hooks/            # useAudioEngine, useRackSocket, useSounds
-│   │   ├── store/            # rackStore (Zustand)
-│   │   ├── styles/           # daw.css (design system completo)
-│   │   └── constants.ts
-│   └── projects/
-│       ├── components/       # Dashboard
-│       └── hooks/            # useProjects
-└── shared/
-├── api/                  # apiClient (Axios + interceptors)
-├── components/           # Icon, Modal
-├── websocket/            # stompClient
-└── setupGlobal.ts
+```
+  src/
+  ├── app/
+  │   ├── App.tsx               # Enrutamiento interno (login → dashboard → rack)
+  │   └── routes.tsx            # Tipos de vista
+  ├── features/
+  │   ├── auth/
+  │   │   ├── components/       # LoginPage con Google Sign-In
+  │   │   ├── hooks/            # useGoogleAuth
+  │   │   └── store/            # authStore (Zustand)
+  │   ├── channelrack/
+  │   │   ├── components/       # ChannelRack, Channel, TransportBar, SoundPicker, StepGrid
+  │   │   ├── hooks/            # useAudioEngine, useRackSocket, useSounds
+  │   │   ├── store/            # rackStore (Zustand)
+  │   │   ├── styles/           # daw.css (design system completo)
+  │   │   └── constants.ts
+  │   └── projects/
+  │       ├── components/       # Dashboard
+  │       └── hooks/            # useProjects
+  └── shared/
+  ├── api/                  # apiClient (Axios + interceptors)
+  ├── components/           # Icon, Modal
+  ├── websocket/            # stompClient
+  └── setupGlobal.ts
+```
 
 ---
 
