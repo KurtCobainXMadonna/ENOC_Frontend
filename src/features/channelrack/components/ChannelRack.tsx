@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo} from 'react';
 import { Icon } from '../../../shared/components/Icon';
 import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
@@ -8,6 +8,9 @@ import { useSounds } from '../hooks/useSounds';
 import { apiClient } from '../../../shared/api/client';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useAudioEngine } from '../hooks/useAudioEngine';
+import { usePresence } from '../../presence/hooks/usePresence';
+import { usePresenceStore } from '../../presence/store/presenceStore';
+
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
@@ -25,8 +28,9 @@ interface ChannelLockState {
 interface Collaborator { id: string; initial: string; color: string; name: string; }
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
 
+// Fallback palette used only when presence hasn't hydrated yet — real colors
+// come from the backend-assigned palette via usePresenceStore.colorFor().
 const AVATAR_COLORS = ['#9B5DE5', '#FF2D6B', '#00F5D4', '#FFB703', '#06D6A0', '#1B4FE8'];
-const colorForIndex = (i: number) => AVATAR_COLORS[i % AVATAR_COLORS.length];
 
 function normalizeSteps(raw: any): boolean[] {
   if (Array.isArray(raw)) return raw.map(Boolean);
@@ -217,17 +221,41 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   const myHeldLocksRef = useRef<Set<string>>(new Set());
   const unlockTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Build collaborators list from project data
-  const collaborators: Collaborator[] = [
-    ...(project.projectOwner ? [{ id: project.projectOwner.userId ?? 'owner', name: project.projectOwner.name ?? 'Propietario', initial: (project.projectOwner.name ?? 'P')[0].toUpperCase(), color: colorForIndex(0) }] : []),
-    ...(project.collaborators ?? []).map((c: any, i: number) => ({ id: c.userId ?? c.id ?? String(i), name: c.name ?? c.email ?? 'Colaborador', initial: (c.name ?? c.email ?? 'C')[0].toUpperCase(), color: colorForIndex(i + 1) })),
-  ];
+  // ── Presence-derived collaborator list ────────────────────────────────────
+  // Replaces the old `project.collaborators` static list. `presenceList` now
+  // reflects who is CURRENTLY connected to this project (live roster), not who
+  // is a member. Colors come from the backend-assigned palette — same user has
+  // the same color on every client.
+  const roster = usePresenceStore(s => s.roster);
+  const colorFor = usePresenceStore(s => s.colorFor);
+  const nameFor = usePresenceStore(s => s.nameFor);
+  const presenceList = useMemo(() => Object.values(roster), [roster]);
 
-  // Get collaborator name by userId
+  const collaborators: Collaborator[] = presenceList.map((p) => ({
+    id: p.userId,
+    name: p.displayName ?? p.email,
+    initial: (p.displayName ?? p.email ?? 'C')[0].toUpperCase(),
+    color: p.color,
+  }));
+
+  // Get collaborator name by userId — now driven by presence store with a
+  // sensible fallback for events that arrive before roster hydration finishes.
   const getCollaboratorName = useCallback((userId: string): string => {
-    const collab = collaborators.find(c => c.id === userId);
-    return collab?.name ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
-  }, [collaborators]);
+    return nameFor(userId) ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
+  }, [nameFor]);
+
+  // Resolve a color for any userId that appears in rack events. Falls back to
+  // the legacy palette cycled by userId hash if presence hasn't loaded yet —
+  // prevents activity feed entries from being invisible during WS warmup.
+  const colorForUser = useCallback((userId: string | undefined | null): string => {
+    const fromPresence = colorFor(userId);
+    if (fromPresence) return fromPresence;
+    if (!userId) return AVATAR_COLORS[0];
+    // Deterministic fallback: same userId → same color across renders.
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  }, [colorFor]);
 
   useEffect(() => {
     const soundUrlMap = new Map(sounds.map((s) => [s.id, s.blobUrl]));
@@ -290,7 +318,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       case 'CHANNEL_ADDED': {
         const ch = payload;
         setWsChannels(prev => [...prev, { id: ch.channelId, name: ch.name, soundId: ch.soundId, volume: Math.round((ch.volume ?? 1) * 100), isMute: ch.active === false, steps: normalizeSteps(ch.steps) }]);
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: '#9B5DE5' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_REMOVED': {
@@ -300,7 +328,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
           const { [String(channelId)]: _, ...rest } = prev;
           return rest;
         });
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_LOCKED': {
@@ -312,7 +340,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
             lockedByUserId: payload.lockedByUserId,
           },
         }));
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_UNLOCKED': {
@@ -327,7 +355,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
           const { [channelId]: _, ...rest } = prev;
           return rest;
         });
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'desbloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#06D6A0' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'desbloqueó', target: `canal ${channelId.slice(0, 6)}`, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'STEP_TOGGLED': {
@@ -351,16 +379,16 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       }
       case 'PLAYBACK_STARTED': {
         void startLocalPlayback();
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: '#00F5D4' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'PLAYBACK_STOPPED': {
         stopLocalPlayback();
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: '#FFB703' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
     }
-  }, [startLocalPlayback, stopLocalPlayback, getCollaboratorName]);
+  }, [startLocalPlayback, stopLocalPlayback, getCollaboratorName, colorForUser]);
 
   const {
     toggleStep,
@@ -373,7 +401,15 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setBpm: setRemoteBpm,
     startPlayback,
     stopPlayback,
+    client,
+    connected,
   } = useRackSocket(project.id, handleRackEvent);
+
+  // Hydrate roster via REST and subscribe to /topic/project/{id}/presence using
+  // the SAME STOMP client established by useRackSocket. Do not open a second
+  // WebSocket — it would double the join/leave events on the backend and break
+  // the SESSION_PREFIX dedup logic that protects the presence counter.
+  usePresence(project.id, client, connected);
 
   const isRackLocked = isPlaying;
 
