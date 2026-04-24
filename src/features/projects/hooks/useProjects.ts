@@ -7,7 +7,6 @@ export interface Project {
   owner: string;
   lastModified: string;
   isOwner: boolean;
-  // Raw backend fields for collaborator display
   collaborators?: any[];
   projectOwner?: any;
 }
@@ -32,7 +31,6 @@ function mapProject(p: any, isOwner: boolean): Project {
     owner: p.projectOwner?.name ?? p.ownerName ?? p.owner ?? (isOwner ? 'Tú' : '?'),
     lastModified: toRelativeTime(p.updatedAt ?? p.lastModified ?? p.createdAt),
     isOwner,
-    // Preserve for ChannelRack collaborator display
     collaborators: p.collaborators ?? [],
     projectOwner: p.projectOwner ?? null,
   };
@@ -80,7 +78,7 @@ export function useProjects() {
   };
 
   const joinProject = async (inviteToken: string) => {
-    const token = inviteToken.trim().toLowerCase();
+    const token = inviteToken.trim().toUpperCase();
     await apiClient.post('/api/invites/accept', null, { params: { token } });
     await fetchProjects();
   };

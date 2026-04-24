@@ -266,7 +266,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
             <label className="label">Código de invitación:</label>
             <input
               className="input"
-              placeholder="b1a3f7f4-9f11-46f1-ae6e-4ab8c8f77f22"
+              placeholder="8A2X9P1M"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value)}
               style={{ textAlign: "center", fontSize: 16, letterSpacing: "0.04em", fontWeight: 700 }}

@@ -11,7 +11,6 @@ import { useAudioEngine } from '../hooks/useAudioEngine';
 import { usePresence } from '../../presence/hooks/usePresence';
 import { usePresenceStore } from '../../presence/store/presenceStore';
 
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
 
@@ -28,8 +27,7 @@ interface ChannelLockState {
 interface Collaborator { id: string; initial: string; color: string; name: string; }
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
 
-// Fallback palette used only when presence hasn't hydrated yet — real colors
-// come from the backend-assigned palette via usePresenceStore.colorFor().
+// Fallback palette used only when presence hasn't hydrated yet
 const AVATAR_COLORS = ['#9B5DE5', '#FF2D6B', '#00F5D4', '#FFB703', '#06D6A0', '#1B4FE8'];
 
 function normalizeSteps(raw: any): boolean[] {
@@ -74,19 +72,16 @@ function AddChannelModal({ open, onClose, sounds, onAdd }: {
   );
 }
 
-// ── InviteModal ───────────────────────────────────────────────────────────────
 function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () => void; projectId: string; }) {
-  const [email, setEmail] = useState('');
   const [inviteToken, setInviteToken] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [copied, setCopied] = useState(false);
 
   const handleInvite = async () => {
-    if (!email.trim()) return;
     setStatus('loading'); setErrorMsg('');
     try {
-      const { data } = await apiClient.post('/api/invites', { projectId, inviteeEmail: email.trim() });
+      const { data } = await apiClient.post('/api/invites', { projectId });
       setInviteToken(data.data.inviteToken);
       setStatus('done');
     } catch (err: any) {
@@ -102,7 +97,7 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
   };
 
   const handleClose = () => {
-    setEmail(''); setInviteToken(''); setStatus('idle'); setErrorMsg(''); setCopied(false);
+    setInviteToken(''); setStatus('idle'); setErrorMsg(''); setCopied(false);
     onClose();
   };
 
@@ -117,31 +112,30 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
         </div>
 
         {status !== 'done' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label className="label">Email del colaborador</label>
-              <input className="input" type="email" placeholder="colaborador@ejemplo.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>
+              Genera un código de acceso rápido para tu equipo. <br/>
+              <strong style={{ color: "var(--neon-pink)" }}>Expira en 15 minutos.</strong>
+            </p>
             {status === 'error' && (
               <div style={{ fontSize: 12, color: 'var(--neon-pink)', fontFamily: 'var(--font-mono)', padding: '8px 12px', background: 'rgba(255,45,107,0.1)', borderRadius: 'var(--radius-md)' }}>{errorMsg}</div>
             )}
-            <button className="btn btn-primary" style={{ justifyContent: 'center', padding: 12 }} onClick={handleInvite} disabled={status === 'loading'}>
-              {status === 'loading' ? 'Generando...' : 'Generar invitación'}
+            <button className="btn btn-primary" style={{ justifyContent: 'center', padding: 12, marginTop: 8 }} onClick={handleInvite} disabled={status === 'loading'}>
+              {status === 'loading' ? 'Generando...' : 'Generar código'}
             </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--neon-green)', fontFamily: 'var(--font-mono)' }}>¡Invitación creada para <strong>{email}</strong>!</div>
-            <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.1em', fontWeight: 700, color: 'var(--neon-cyan)', textAlign: 'center', wordBreak: 'break-all' }}>
+            <div style={{ fontSize: 12, color: 'var(--neon-green)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>¡Código generado con éxito!</div>
+            <div style={{ background: 'var(--bg-deep)', border: '1px dashed var(--neon-violet)', borderRadius: 'var(--radius-md)', padding: '16px', fontFamily: 'var(--font-display)', fontSize: 28, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--text-primary)', textAlign: 'center', cursor: 'pointer', userSelect: 'all' }}>
               {inviteToken}
             </div>
-            <button className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={handleCopy}>
-              {copied ? '✓ Copiado' : 'Copiar token'}
+            <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={handleCopy}>
+              {copied ? '✓ Copiado al portapapeles' : 'Copiar código'}
             </button>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-              El colaborador debe aceptar en Zwing → "Unirse a Proyecto"
+              El colaborador debe ingresar este código en su Dashboard.
             </div>
-            <button className="btn btn-ghost" style={{ justifyContent: 'center', fontSize: 10 }} onClick={handleClose}>Cerrar</button>
           </div>
         )}
       </div>
@@ -221,11 +215,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   const myHeldLocksRef = useRef<Set<string>>(new Set());
   const unlockTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // ── Presence-derived collaborator list ────────────────────────────────────
-  // Replaces the old `project.collaborators` static list. `presenceList` now
-  // reflects who is CURRENTLY connected to this project (live roster), not who
-  // is a member. Colors come from the backend-assigned palette — same user has
-  // the same color on every client.
   const roster = usePresenceStore(s => s.roster);
   const colorFor = usePresenceStore(s => s.colorFor);
   const nameFor = usePresenceStore(s => s.nameFor);
@@ -238,20 +227,14 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     color: p.color,
   }));
 
-  // Get collaborator name by userId — now driven by presence store with a
-  // sensible fallback for events that arrive before roster hydration finishes.
   const getCollaboratorName = useCallback((userId: string): string => {
     return nameFor(userId) ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
   }, [nameFor]);
 
-  // Resolve a color for any userId that appears in rack events. Falls back to
-  // the legacy palette cycled by userId hash if presence hasn't loaded yet —
-  // prevents activity feed entries from being invisible during WS warmup.
   const colorForUser = useCallback((userId: string | undefined | null): string => {
     const fromPresence = colorFor(userId);
     if (fromPresence) return fromPresence;
     if (!userId) return AVATAR_COLORS[0];
-    // Deterministic fallback: same userId → same color across renders.
     let hash = 0;
     for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) | 0;
     return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
@@ -271,7 +254,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     );
   }, [sounds, wsChannels, updateLoopData]);
 
-  // ── visual step sequencer ─────────────────────────────────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepRef = useRef(-1);
 
@@ -285,7 +267,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     stepRef.current = -1; setCurrentStep(-1);
   }, []);
 
-  // ── play / stop ───────────────────────────────────────────────────────────
   const startLocalPlayback = useCallback(() => {
     startLoop(bpm);
     startVisual();
@@ -298,7 +279,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setIsPlaying(false);
   }, [stopLoop, stopVisual]);
 
-  // ── WebSocket events ──────────────────────────────────────────────────────
   const handleRackEvent = useCallback((event: any) => {
     const payload = event.payload ?? event;
     const userName = getCollaboratorName(event.triggeredBy);
@@ -405,10 +385,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     connected,
   } = useRackSocket(project.id, handleRackEvent);
 
-  // Hydrate roster via REST and subscribe to /topic/project/{id}/presence using
-  // the SAME STOMP client established by useRackSocket. Do not open a second
-  // WebSocket — it would double the join/leave events on the backend and break
-  // the SESSION_PREFIX dedup logic that protects the presence counter.
   usePresence(project.id, client, connected);
 
   const isRackLocked = isPlaying;
@@ -452,7 +428,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       return holderEmail !== myEmail;
     }
 
-    // If no comparable email is present, prefer not blocking to avoid false positives.
     return false;
   }, [channelLocks, user?.email]);
 
@@ -512,7 +487,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     };
   }, [unlockChannel]);
 
-  // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
@@ -527,7 +501,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setVolume(channelId, volume, !ch.isMute);
   };
 
-  // ── render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-void)' }}>
       <TransportBar
