@@ -200,7 +200,9 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
 interface Project { id: string; name: string; collaborators?: any[]; projectOwner?: any; }
 
 export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
-  const { sounds } = useSounds();
+  // FIX 1: load globals + project-scoped uploads, and grab refetch so the library
+  // refreshes after a successful upload.
+  const { sounds, refetch: refetchSounds } = useSounds(project.id);
   const user = useAuthStore((state) => state.user);
   const { startLoop, stopLoop, updateLoopData, previewSound } = useAudioEngine();
   const [wsChannels, setWsChannels] = useState<WsChannel[]>([]);
@@ -516,7 +518,13 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <SoundLibrary sounds={sounds} onPreviewSound={previewSound} />
+        {/* FIX 2: pass the real project.id and the refetch fn from useSounds. */}
+        <SoundLibrary
+          sounds={sounds}
+          projectId={project.id}
+          onPreviewSound={previewSound}
+          onSoundsChanged={refetchSounds}
+        />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 16, gap: 12 }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
