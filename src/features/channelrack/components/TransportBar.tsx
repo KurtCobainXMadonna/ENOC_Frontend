@@ -12,15 +12,14 @@ interface TransportBarProps {
   projectName: string;
   collaborators: Collaborator[];
   onBack: () => void;
+  onLogout: () => void;
   onInvite: () => void;
 }
 
-export function TransportBar({ isPlaying, isRackLocked, bpm, onPlay, onStop, onBpmChange, projectName, collaborators, onBack, onInvite }: TransportBarProps) {
+export function TransportBar({ isPlaying, isRackLocked, bpm, onPlay, onStop, onBpmChange, projectName, collaborators, onBack, onLogout, onInvite }: TransportBarProps) {
   return (
     <div style={{ height: 52, background: 'var(--bg-deep)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', flexShrink: 0 }}>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.04em', color: 'var(--text-primary)', textShadow: '0 0 20px rgba(155,93,229,0.4)' }}>ZWING</div>
-      </button>
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-0.04em', color: 'var(--text-primary)', textShadow: '0 0 20px rgba(155,93,229,0.4)' }}>ZWING</div>
 
       <div style={{ width: 1, height: 28, background: 'var(--border-subtle)' }} />
 
@@ -44,14 +43,30 @@ export function TransportBar({ isPlaying, isRackLocked, bpm, onPlay, onStop, onB
 
       <div style={{ width: 1, height: 28, background: 'var(--border-subtle)' }} />
 
-      <button className="btn btn-ghost" style={{ padding: '6px 10px', gap: 4 }}><Icon.Save /> <span style={{ fontSize: 10 }}>Guardar</span></button>
+      <button
+        className="btn btn-ghost"
+        onClick={onBack}
+        title="Volver al listado de proyectos"
+        style={{ padding: '6px 10px', gap: 6 }}
+      >
+        <span aria-hidden="true" style={{ fontSize: 12, lineHeight: 1 }}>←</span>
+        <span style={{ fontSize: 10 }}>Proyectos</span>
+      </button>
+
+      <button
+        className="btn btn-ghost"
+        onClick={onLogout}
+        title="Cerrar sesión"
+        style={{ padding: '6px 10px', gap: 6 }}
+      >
+        <Icon.Logout />
+        <span style={{ fontSize: 10 }}>Salir</span>
+      </button>
 
       {/* Invite collaborator button */}
       <button className="btn btn-ghost" style={{ padding: '6px 10px', gap: 4 }} onClick={onInvite} title="Invitar colaborador">
         <Icon.Users /> <span style={{ fontSize: 10 }}>Invitar</span>
       </button>
-
-      <button className="btn btn-ghost" style={{ padding: '6px 10px' }}><Icon.Settings /></button>
 
       <div style={{ flex: 1 }} />
 

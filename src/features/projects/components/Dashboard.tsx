@@ -13,9 +13,10 @@ interface Project {
 
 interface DashboardProps {
   onOpenProject: (project: Project) => void;
+  onLogout: () => void;
 }
 
-export function Dashboard({ onOpenProject }: DashboardProps) {
+export function Dashboard({ onOpenProject, onLogout }: DashboardProps) {
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
   const [projectName, setProjectName] = useState("Nuevo Beat");
@@ -98,6 +99,15 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 12, fontWeight: 700, cursor: "pointer",
           }}>H</div>
+          <button
+            className="btn btn-ghost"
+            onClick={onLogout}
+            title="Cerrar sesión"
+            style={{ padding: '8px 12px', gap: 6 }}
+          >
+            <Icon.Logout />
+            <span style={{ fontSize: 11 }}>Salir</span>
+          </button>
         </div>
       </div>
 
@@ -266,7 +276,7 @@ export function Dashboard({ onOpenProject }: DashboardProps) {
             <label className="label">Código de invitación:</label>
             <input
               className="input"
-              placeholder="b1a3f7f4-9f11-46f1-ae6e-4ab8c8f77f22"
+              placeholder="8A2X9P1M"
               value={inviteCode}
               onChange={e => setInviteCode(e.target.value)}
               style={{ textAlign: "center", fontSize: 16, letterSpacing: "0.04em", fontWeight: 700 }}

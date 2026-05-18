@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { LoginPage } from '../features/auth/components/LoginPage';
 import { Dashboard } from '../features/projects/components/Dashboard';
 import { ChannelRackPage } from '../features/channelrack/components/ChannelRack';
+import { useAuthStore } from '../features/auth/store/authStore';
 
 // Full project shape shared across views
 export interface ProjectFull {
@@ -17,6 +18,20 @@ export interface ProjectFull {
 export default function App() {
   const [view, setView] = useState<'login' | 'dashboard' | 'rack'>('login');
   const [currentProject, setCurrentProject] = useState<ProjectFull | null>(null);
+  const user = useAuthStore((state) => state.user);
+
+  useEffect(() => {
+    if (!user && view !== 'login') {
+      setCurrentProject(null);
+      setView('login');
+    }
+  }, [user, view]);
+
+  const handleLogout = async () => {
+    await useAuthStore.getState().logout();
+    setCurrentProject(null);
+    setView('login');
+  };
 
   return (
     <>
@@ -24,12 +39,14 @@ export default function App() {
       {view === 'dashboard' && (
         <Dashboard
           onOpenProject={(p: ProjectFull) => { setCurrentProject(p); setView('rack'); }}
+          onLogout={() => { void handleLogout(); }}
         />
       )}
       {view === 'rack' && currentProject && (
         <ChannelRackPage
           project={currentProject}
           onBack={() => setView('dashboard')}
+          onLogout={() => { void handleLogout(); }}
         />
       )}
     </>

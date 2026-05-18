@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 
@@ -25,55 +25,67 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
 
+  // Exposed so usePresence (and any other sibling hook) can reuse the same
+  // STOMP session instead of opening a second WebSocket. Two connections from
+  // one tab would create two Spring session IDs and collide with the backend's
+  // SESSION_PREFIX dedup logic, corrupting the presence counter.
+  const [client, setClient] = useState<Client | null>(null);
+  const [connected, setConnected] = useState(false);
+
   useEffect(() => {
     const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_BASE_URL;
-    const client = new Client({
+    const c = new Client({
       webSocketFactory: () => new SockJS(`${WS_BASE_URL}/ws`),
       reconnectDelay: 3000,
       onConnect: () => {
-        client.subscribe(`/topic/rack/${projectId}`, (msg) => {
+        c.subscribe(`/topic/rack/${projectId}`, (msg) => {
           try {
             onEventRef.current(JSON.parse(msg.body));
           } catch (err) {
             console.error('[WS Parse Error] rack topic', err);
           }
         });
-        client.subscribe('/user/queue/errors', (msg) => {
+        c.subscribe('/user/queue/errors', (msg) => {
           console.error('[WS Error]', msg.body);
         });
-        client.subscribe('/user/queue/rack/state', (msg) => {
+        c.subscribe('/user/queue/rack/state', (msg) => {
           try {
             onEventRef.current(JSON.parse(msg.body));
           } catch (err) {
             console.error('[WS Parse Error] rack state', err);
           }
         });
-        client.publish({ destination: `/app/project/${projectId}/join` });
-        client.publish({ destination: `/app/rack/${projectId}/load` });
+        c.publish({ destination: `/app/project/${projectId}/join` });
+        c.publish({ destination: `/app/rack/${projectId}/load` });
+        setConnected(true);
       },
+      onDisconnect: () => setConnected(false),
       onStompError: (frame) => {
         console.error('[STOMP Error]', frame.headers['message'], frame.body);
       },
     });
-    clientRef.current = client;
-    client.activate();
+    clientRef.current = c;
+    setClient(c);
+    c.activate();
 
     return () => {
-      if (client.connected) {
-        client.publish({ destination: `/app/project/${projectId}/leave` });
+      if (c.connected) {
+        c.publish({ destination: `/app/project/${projectId}/leave` });
       }
-      client.deactivate();
+      c.deactivate();
       clientRef.current = null;
+      setClient(null);
+      setConnected(false);
     };
   }, [projectId]);
 
   const sendCommand = useCallback((destination: string, body?: object) => {
-    const client = clientRef.current;
-    if (!client?.connected) {
+    const c = clientRef.current;
+    if (!c?.connected) {
       console.warn('[WS] Not connected, dropping command to', destination);
       return;
     }
-    client.publish({
+    c.publish({
       destination,
       body: body ? JSON.stringify(body) : undefined,
     });
@@ -128,5 +140,9 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
     setBpm,
     startPlayback,
     stopPlayback,
+    // Exposed for presence (and future sibling hooks) — do NOT use this to send
+    // rack commands; use the typed functions above so behavior stays consistent.
+    client,
+    connected,
   };
 }

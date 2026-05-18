@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo} from 'react';
 import { Icon } from '../../../shared/components/Icon';
 import { TransportBar } from './TransportBar';
 import { SoundLibrary } from './SoundPicker';
@@ -8,6 +8,8 @@ import { useSounds } from '../hooks/useSounds';
 import { apiClient } from '../../../shared/api/client';
 import { useAuthStore } from '../../auth/store/authStore';
 import { useAudioEngine } from '../hooks/useAudioEngine';
+import { usePresence } from '../../presence/hooks/usePresence';
+import { usePresenceStore } from '../../presence/store/presenceStore';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 interface Sound { id: string; name: string; category: string; blobUrl: string; }
@@ -25,8 +27,8 @@ interface ChannelLockState {
 interface Collaborator { id: string; initial: string; color: string; name: string; }
 interface Activity { user: string; avatar: string; action: string; target: string; color: string; }
 
+// Fallback palette used only when presence hasn't hydrated yet
 const AVATAR_COLORS = ['#9B5DE5', '#FF2D6B', '#00F5D4', '#FFB703', '#06D6A0', '#1B4FE8'];
-const colorForIndex = (i: number) => AVATAR_COLORS[i % AVATAR_COLORS.length];
 
 function normalizeSteps(raw: any): boolean[] {
   if (Array.isArray(raw)) return raw.map(Boolean);
@@ -70,19 +72,16 @@ function AddChannelModal({ open, onClose, sounds, onAdd }: {
   );
 }
 
-// ── InviteModal ───────────────────────────────────────────────────────────────
 function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () => void; projectId: string; }) {
-  const [email, setEmail] = useState('');
   const [inviteToken, setInviteToken] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const [copied, setCopied] = useState(false);
 
   const handleInvite = async () => {
-    if (!email.trim()) return;
     setStatus('loading'); setErrorMsg('');
     try {
-      const { data } = await apiClient.post('/api/invites', { projectId, inviteeEmail: email.trim() });
+      const { data } = await apiClient.post('/api/invites', { projectId });
       setInviteToken(data.data.inviteToken);
       setStatus('done');
     } catch (err: any) {
@@ -98,7 +97,7 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
   };
 
   const handleClose = () => {
-    setEmail(''); setInviteToken(''); setStatus('idle'); setErrorMsg(''); setCopied(false);
+    setInviteToken(''); setStatus('idle'); setErrorMsg(''); setCopied(false);
     onClose();
   };
 
@@ -113,31 +112,30 @@ function InviteModal({ open, onClose, projectId }: { open: boolean; onClose: () 
         </div>
 
         {status !== 'done' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div>
-              <label className="label">Email del colaborador</label>
-              <input className="input" type="email" placeholder="colaborador@ejemplo.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleInvite()} />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: 0 }}>
+              Genera un código de acceso rápido para tu equipo. <br/>
+              <strong style={{ color: "var(--neon-pink)" }}>Expira en 15 minutos.</strong>
+            </p>
             {status === 'error' && (
               <div style={{ fontSize: 12, color: 'var(--neon-pink)', fontFamily: 'var(--font-mono)', padding: '8px 12px', background: 'rgba(255,45,107,0.1)', borderRadius: 'var(--radius-md)' }}>{errorMsg}</div>
             )}
-            <button className="btn btn-primary" style={{ justifyContent: 'center', padding: 12 }} onClick={handleInvite} disabled={status === 'loading'}>
-              {status === 'loading' ? 'Generando...' : 'Generar invitación'}
+            <button className="btn btn-primary" style={{ justifyContent: 'center', padding: 12, marginTop: 8 }} onClick={handleInvite} disabled={status === 'loading'}>
+              {status === 'loading' ? 'Generando...' : 'Generar código'}
             </button>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ fontSize: 12, color: 'var(--neon-green)', fontFamily: 'var(--font-mono)' }}>¡Invitación creada para <strong>{email}</strong>!</div>
-            <div style={{ background: 'var(--bg-deep)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 13, letterSpacing: '0.1em', fontWeight: 700, color: 'var(--neon-cyan)', textAlign: 'center', wordBreak: 'break-all' }}>
+            <div style={{ fontSize: 12, color: 'var(--neon-green)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>¡Código generado con éxito!</div>
+            <div style={{ background: 'var(--bg-deep)', border: '1px dashed var(--neon-violet)', borderRadius: 'var(--radius-md)', padding: '16px', fontFamily: 'var(--font-display)', fontSize: 28, letterSpacing: '0.1em', fontWeight: 800, color: 'var(--text-primary)', textAlign: 'center', cursor: 'pointer', userSelect: 'all' }}>
               {inviteToken}
             </div>
-            <button className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={handleCopy}>
-              {copied ? '✓ Copiado' : 'Copiar token'}
+            <button className="btn btn-secondary" style={{ justifyContent: 'center' }} onClick={handleCopy}>
+              {copied ? '✓ Copiado al portapapeles' : 'Copiar código'}
             </button>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', textAlign: 'center' }}>
-              El colaborador debe aceptar en Zwing → "Unirse a Proyecto"
+              El colaborador debe ingresar este código en su Dashboard.
             </div>
-            <button className="btn btn-ghost" style={{ justifyContent: 'center', fontSize: 10 }} onClick={handleClose}>Cerrar</button>
           </div>
         )}
       </div>
@@ -201,8 +199,10 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
 // ── ChannelRackPage ───────────────────────────────────────────────────────────
 interface Project { id: string; name: string; collaborators?: any[]; projectOwner?: any; }
 
-export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
-  const { sounds } = useSounds();
+export function ChannelRackPage({ project, onBack, onLogout }: { project: Project; onBack: () => void; onLogout: () => void }) {
+  // FIX 1: load globals + project-scoped uploads, and grab refetch so the library
+  // refreshes after a successful upload.
+  const { sounds, refetch: refetchSounds } = useSounds(project.id);
   const user = useAuthStore((state) => state.user);
   const { startLoop, stopLoop, updateLoopData, previewSound } = useAudioEngine();
   const [wsChannels, setWsChannels] = useState<WsChannel[]>([]);
@@ -217,17 +217,30 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
   const myHeldLocksRef = useRef<Set<string>>(new Set());
   const unlockTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  // Build collaborators list from project data
-  const collaborators: Collaborator[] = [
-    ...(project.projectOwner ? [{ id: project.projectOwner.userId ?? 'owner', name: project.projectOwner.name ?? 'Propietario', initial: (project.projectOwner.name ?? 'P')[0].toUpperCase(), color: colorForIndex(0) }] : []),
-    ...(project.collaborators ?? []).map((c: any, i: number) => ({ id: c.userId ?? c.id ?? String(i), name: c.name ?? c.email ?? 'Colaborador', initial: (c.name ?? c.email ?? 'C')[0].toUpperCase(), color: colorForIndex(i + 1) })),
-  ];
+  const roster = usePresenceStore(s => s.roster);
+  const colorFor = usePresenceStore(s => s.colorFor);
+  const nameFor = usePresenceStore(s => s.nameFor);
+  const presenceList = useMemo(() => Object.values(roster), [roster]);
 
-  // Get collaborator name by userId
+  const collaborators: Collaborator[] = presenceList.map((p) => ({
+    id: p.userId,
+    name: p.displayName ?? p.email,
+    initial: (p.displayName ?? p.email ?? 'C')[0].toUpperCase(),
+    color: p.color,
+  }));
+
   const getCollaboratorName = useCallback((userId: string): string => {
-    const collab = collaborators.find(c => c.id === userId);
-    return collab?.name ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
-  }, [collaborators]);
+    return nameFor(userId) ?? (userId === 'owner' ? 'Propietario' : 'Alguien');
+  }, [nameFor]);
+
+  const colorForUser = useCallback((userId: string | undefined | null): string => {
+    const fromPresence = colorFor(userId);
+    if (fromPresence) return fromPresence;
+    if (!userId) return AVATAR_COLORS[0];
+    let hash = 0;
+    for (let i = 0; i < userId.length; i++) hash = (hash * 31 + userId.charCodeAt(i)) | 0;
+    return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+  }, [colorFor]);
 
   useEffect(() => {
     const soundUrlMap = new Map(sounds.map((s) => [s.id, s.blobUrl]));
@@ -243,7 +256,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     );
   }, [sounds, wsChannels, updateLoopData]);
 
-  // ── visual step sequencer ─────────────────────────────────────────────────
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const stepRef = useRef(-1);
 
@@ -257,7 +269,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     stepRef.current = -1; setCurrentStep(-1);
   }, []);
 
-  // ── play / stop ───────────────────────────────────────────────────────────
   const startLocalPlayback = useCallback(() => {
     startLoop(bpm);
     startVisual();
@@ -270,7 +281,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setIsPlaying(false);
   }, [stopLoop, stopVisual]);
 
-  // ── WebSocket events ──────────────────────────────────────────────────────
   const handleRackEvent = useCallback((event: any) => {
     const payload = event.payload ?? event;
     const userName = getCollaboratorName(event.triggeredBy);
@@ -290,7 +300,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       case 'CHANNEL_ADDED': {
         const ch = payload;
         setWsChannels(prev => [...prev, { id: ch.channelId, name: ch.name, soundId: ch.soundId, volume: Math.round((ch.volume ?? 1) * 100), isMute: ch.active === false, steps: normalizeSteps(ch.steps) }]);
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: '#9B5DE5' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'agregó', target: ch.name, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_REMOVED': {
@@ -300,7 +310,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
           const { [String(channelId)]: _, ...rest } = prev;
           return rest;
         });
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'eliminó', target: 'un canal', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_LOCKED': {
@@ -312,7 +322,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
             lockedByUserId: payload.lockedByUserId,
           },
         }));
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#FF2D6B' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'bloqueó', target: `canal ${channelId.slice(0, 6)}`, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'CHANNEL_UNLOCKED': {
@@ -327,7 +337,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
           const { [channelId]: _, ...rest } = prev;
           return rest;
         });
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'desbloqueó', target: `canal ${channelId.slice(0, 6)}`, color: '#06D6A0' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'desbloqueó', target: `canal ${channelId.slice(0, 6)}`, color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'STEP_TOGGLED': {
@@ -351,16 +361,16 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       }
       case 'PLAYBACK_STARTED': {
         void startLocalPlayback();
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: '#00F5D4' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'inició', target: 'reproducción', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
       case 'PLAYBACK_STOPPED': {
         stopLocalPlayback();
-        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: '#FFB703' }, ...prev.slice(0, 3)]);
+        setActivity(prev => [{ user: userName, avatar: (userName ?? 'A')[0].toUpperCase(), action: 'detuvo', target: 'reproducción', color: colorForUser(event.triggeredBy) }, ...prev.slice(0, 3)]);
         break;
       }
     }
-  }, [startLocalPlayback, stopLocalPlayback, getCollaboratorName]);
+  }, [startLocalPlayback, stopLocalPlayback, getCollaboratorName, colorForUser]);
 
   const {
     toggleStep,
@@ -373,7 +383,11 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setBpm: setRemoteBpm,
     startPlayback,
     stopPlayback,
+    client,
+    connected,
   } = useRackSocket(project.id, handleRackEvent);
+
+  usePresence(project.id, client, connected);
 
   const isRackLocked = isPlaying;
 
@@ -416,7 +430,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
       return holderEmail !== myEmail;
     }
 
-    // If no comparable email is present, prefer not blocking to avoid false positives.
     return false;
   }, [channelLocks, user?.email]);
 
@@ -476,7 +489,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     };
   }, [unlockChannel]);
 
-  // ── local channel handlers ────────────────────────────────────────────────
   const handleToggleMute = (channelId: string) => {
     const ch = wsChannels.find(c => c.id === channelId);
     if (!ch) return;
@@ -491,7 +503,6 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
     setVolume(channelId, volume, !ch.isMute);
   };
 
-  // ── render ────────────────────────────────────────────────────────────────
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-void)' }}>
       <TransportBar
@@ -503,11 +514,18 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         projectName={project.name}
         collaborators={collaborators}
         onBack={onBack}
+        onLogout={onLogout}
         onInvite={() => setInviteModalOpen(true)}
       />
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <SoundLibrary sounds={sounds} onPreviewSound={previewSound} />
+        {/* FIX 2: pass the real project.id and the refetch fn from useSounds. */}
+        <SoundLibrary
+          sounds={sounds}
+          projectId={project.id}
+          onPreviewSound={previewSound}
+          onSoundsChanged={refetchSounds}
+        />
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 16, gap: 12 }}>
           <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
