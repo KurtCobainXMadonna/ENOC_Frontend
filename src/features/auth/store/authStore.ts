@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000; // 15 minutes — matches backend
-const INACTIVITY_WARNING_MS = 12 * 60 * 1000; // show prompt at 12 min
+export const INACTIVITY_WARNING_MS = 12 * 60 * 1000; // show prompt at 12 min
 
 interface AuthState {
   user: { name: string; email: string } | null;

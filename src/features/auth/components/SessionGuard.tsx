@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuthStore } from '../store/authStore';
+import { INACTIVITY_WARNING_MS, useAuthStore } from '../store/authStore';
 import { apiClient } from '../../../shared/api/client';
 
-const WARN_BEFORE_MS = 3 * 60 * 1000; // show warning 3 min before expiry
+const WARN_BEFORE_MS = 15 * 60 * 1000 - INACTIVITY_WARNING_MS;
 
 export function SessionGuard() {
   const { user, sessionExpiresAt, resetSessionTimer, forceLogout } = useAuthStore();
