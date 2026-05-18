@@ -199,7 +199,7 @@ function ProjectInfo({ name, bpm, collaborators, currentStep, isPlaying }: { nam
 // ── ChannelRackPage ───────────────────────────────────────────────────────────
 interface Project { id: string; name: string; collaborators?: any[]; projectOwner?: any; }
 
-export function ChannelRackPage({ project, onBack }: { project: Project; onBack: () => void }) {
+export function ChannelRackPage({ project, onBack, onLogout }: { project: Project; onBack: () => void; onLogout: () => void }) {
   // FIX 1: load globals + project-scoped uploads, and grab refetch so the library
   // refreshes after a successful upload.
   const { sounds, refetch: refetchSounds } = useSounds(project.id);
@@ -514,6 +514,7 @@ export function ChannelRackPage({ project, onBack }: { project: Project; onBack:
         projectName={project.name}
         collaborators={collaborators}
         onBack={onBack}
+        onLogout={onLogout}
         onInvite={() => setInviteModalOpen(true)}
       />
 

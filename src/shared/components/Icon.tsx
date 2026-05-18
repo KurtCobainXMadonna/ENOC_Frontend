@@ -39,6 +39,13 @@ export const Icon = {
       <path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.9 2.9l1.4 1.4M9.7 9.7l1.4 1.4M2.9 11.1l1.4-1.4M9.7 4.3l1.4-1.4" strokeLinecap="round" />
     </svg>
   ),
+  Logout: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="1.5" fill="none">
+      <path d="M5.5 2.5H3.5A1.5 1.5 0 002 4v6A1.5 1.5 0 003.5 11.5h2" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 4.5l2.5 2.5L7 9.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9.5 7H5" strokeLinecap="round" />
+    </svg>
+  ),
   Save: () => (
     <svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" strokeWidth="1.5" fill="none">
       <path d="M11 12H3a1 1 0 01-1-1V3a1 1 0 011-1h6.5L12 4.5V11a1 1 0 01-1 1z" />
