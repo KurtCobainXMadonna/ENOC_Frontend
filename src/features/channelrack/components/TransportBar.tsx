@@ -68,8 +68,6 @@ export function TransportBar({ isPlaying, isRackLocked, bpm, onPlay, onStop, onB
         <Icon.Users /> <span style={{ fontSize: 10 }}>Invitar</span>
       </button>
 
-      <button className="btn btn-ghost" style={{ padding: '6px 10px' }}><Icon.Settings /></button>
-
       <div style={{ flex: 1 }} />
 
       <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)', padding: '6px 14px', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
