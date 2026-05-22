@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import type { Client } from '@stomp/stompjs';
 import { apiClient } from '../../../shared/api/client';
+import { sanitizePathSegment } from '../../../shared/utils/url';
 import { usePresenceStore } from '../store/presenceStore';
 import type { Presence, PresenceEvent } from '../types/presence';
 
@@ -27,15 +28,16 @@ import type { Presence, PresenceEvent } from '../types/presence';
 export function usePresence(projectId: string, client: Client | null, connected: boolean) {
   const setRoster = usePresenceStore((s) => s.setRoster);
   const clear = usePresenceStore((s) => s.clear);
+  const safeProjectId = sanitizePathSegment(projectId);
 
   // Step 1 — REST hydration on projectId change. Runs independently of the WS
   // so the roster appears instantly even on slow WebSocket handshakes.
   useEffect(() => {
-    if (!projectId) return;
+    if (!safeProjectId) return;
     let cancelled = false;
 
     apiClient
-      .get(`/api/projects/${projectId}/presence`)
+      .get(`/api/projects/${safeProjectId}/presence`)
       .then((res) => {
         if (cancelled) return;
         const roster: Presence[] = res.data?.data ?? [];
@@ -49,13 +51,13 @@ export function usePresence(projectId: string, client: Client | null, connected:
     return () => {
       cancelled = true;
     };
-  }, [projectId, setRoster]);
+  }, [safeProjectId, setRoster]);
 
   // Step 2 — STOMP subscription, gated on connected flag from useRackSocket.
   useEffect(() => {
-    if (!projectId || !client || !connected) return;
+    if (!safeProjectId || !client || !connected) return;
 
-    const sub = client.subscribe(`/topic/project/${projectId}/presence`, (msg) => {
+    const sub = client.subscribe(`/topic/project/${safeProjectId}/presence`, (msg) => {
       try {
         const event: PresenceEvent = JSON.parse(msg.body);
         setRoster(event.roster ?? [], event.type, event.changedUserId);
@@ -71,7 +73,7 @@ export function usePresence(projectId: string, client: Client | null, connected:
         // Ignore — client may already be disconnecting.
       }
     };
-  }, [projectId, client, connected, setRoster]);
+  }, [safeProjectId, client, connected, setRoster]);
 
   // Step 3 — clear store when the component using this hook unmounts.
   useEffect(() => {

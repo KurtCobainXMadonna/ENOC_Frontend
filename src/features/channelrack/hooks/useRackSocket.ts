@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
+import { sanitizePathSegment } from '../../../shared/utils/url';
 
 export interface StepToggledPayload {
   channelId: string;
@@ -24,6 +25,7 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const clientRef = useRef<Client | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
+  const safeProjectId = sanitizePathSegment(projectId);
 
   // Exposed so usePresence (and any other sibling hook) can reuse the same
   // STOMP session instead of opening a second WebSocket. Two connections from
@@ -33,12 +35,17 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   const [connected, setConnected] = useState(false);
 
   useEffect(() => {
+    if (!safeProjectId) {
+      console.warn('[useRackSocket] Invalid projectId, skipping STOMP setup');
+      return;
+    }
+
     const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || import.meta.env.VITE_API_BASE_URL;
     const c = new Client({
       webSocketFactory: () => new SockJS(`${WS_BASE_URL}/ws`),
       reconnectDelay: 3000,
       onConnect: () => {
-        c.subscribe(`/topic/rack/${projectId}`, (msg) => {
+        c.subscribe(`/topic/rack/${safeProjectId}`, (msg) => {
           try {
             onEventRef.current(JSON.parse(msg.body));
           } catch (err) {
@@ -55,8 +62,8 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
             console.error('[WS Parse Error] rack state', err);
           }
         });
-        c.publish({ destination: `/app/project/${projectId}/join` });
-        c.publish({ destination: `/app/rack/${projectId}/load` });
+        c.publish({ destination: `/app/project/${safeProjectId}/join` });
+        c.publish({ destination: `/app/rack/${safeProjectId}/load` });
         setConnected(true);
       },
       onDisconnect: () => setConnected(false),
@@ -70,14 +77,14 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
 
     return () => {
       if (c.connected) {
-        c.publish({ destination: `/app/project/${projectId}/leave` });
+        c.publish({ destination: `/app/project/${safeProjectId}/leave` });
       }
       c.deactivate();
       clientRef.current = null;
       setClient(null);
       setConnected(false);
     };
-  }, [projectId]);
+  }, [safeProjectId]);
 
   const sendCommand = useCallback((destination: string, body?: object) => {
     const c = clientRef.current;
@@ -92,42 +99,42 @@ export function useRackSocket(projectId: string, onEvent: (e: RackEvent) => void
   }, []);
 
   const toggleStep = (channelId: string, stepIndex: number) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/step`, { stepIndex });
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/step`, { stepIndex }) : undefined;
 
   const addChannel = (name: string, soundId: string) =>
-    sendCommand(`/app/rack/${projectId}/channel/add`, { name, soundId });
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/add`, { name, soundId }) : undefined;
 
   const removeChannel = (channelId: string) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/remove`);
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/remove`) : undefined;
 
   /** Mute/unmute: send only mutable fields so the backend does not require a lock */
   const toggleMute = (channelId: string, currentlyMuted: boolean, volume: number) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/update`, {
       volume: volume / 100,
       active: currentlyMuted, // flip: if currently muted (active=false) → set active=true
-    });
+    }) : undefined;
 
   /** Volume: send only mutable fields so the backend does not require a lock */
   const setVolume = (channelId: string, volume: number, active: boolean) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/update`, {
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/update`, {
       volume: volume / 100,
       active,
-    });
+    }) : undefined;
 
   const lockChannel = (channelId: string) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/lock`);
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/lock`) : undefined;
 
   const unlockChannel = (channelId: string) =>
-    sendCommand(`/app/rack/${projectId}/channel/${channelId}/unlock`);
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/channel/${channelId}/unlock`) : undefined;
 
   const setBpm = (bpm: number) =>
-    sendCommand(`/app/rack/${projectId}/bpm/update`, { bpm });
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/bpm/update`, { bpm }) : undefined;
 
   const startPlayback = () =>
-    sendCommand(`/app/rack/${projectId}/playback/start`);
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/playback/start`) : undefined;
 
   const stopPlayback = () =>
-    sendCommand(`/app/rack/${projectId}/playback/stop`);
+    safeProjectId ? sendCommand(`/app/rack/${safeProjectId}/playback/stop`) : undefined;
 
   return {
     toggleStep,
