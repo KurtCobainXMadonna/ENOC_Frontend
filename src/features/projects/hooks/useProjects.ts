@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '../../../shared/api/client';
+import { sanitizePathSegment } from '../../../shared/utils/url';
 
 export interface Project {
   id: string;
@@ -73,7 +74,12 @@ export function useProjects() {
   };
 
   const deleteProject = async (projectId: string) => {
-    await apiClient.delete(`/api/projects/${projectId}`);
+    const safeProjectId = sanitizePathSegment(projectId);
+    if (!safeProjectId) {
+      throw new Error('Invalid project id');
+    }
+
+    await apiClient.delete(`/api/projects/${safeProjectId}`);
     setOwnedProjects(prev => prev.filter(p => p.id !== projectId));
   };
 

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../../../shared/api/client';
+import { sanitizePathSegment } from '../../../shared/utils/url';
 
 export interface Sound {
   id: string;
@@ -18,10 +19,18 @@ export interface Sound {
 export function useSounds(projectId?: string) {
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const safeProjectId = sanitizePathSegment(projectId);
 
   const fetchSounds = useCallback(async () => {
     setIsLoading(true);
-    const url = projectId ? `/api/sounds/project/${projectId}` : '/api/sounds';
+
+    if (projectId && !safeProjectId) {
+      console.warn('[useSounds] Ignoring invalid projectId for project-scoped sounds');
+      setIsLoading(false);
+      return;
+    }
+
+    const url = safeProjectId ? `/api/sounds/project/${safeProjectId}` : '/api/sounds';
     try {
       const { data } = await apiClient.get(url);
       setSounds(
@@ -39,7 +48,7 @@ export function useSounds(projectId?: string) {
     } finally {
       setIsLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, safeProjectId]);
 
   useEffect(() => {
     fetchSounds();
