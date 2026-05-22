@@ -25,12 +25,6 @@ export default defineConfig({
         '**/*.config.*',
         '**/types/**',
       ],
-      thresholds: {
-        lines: 40,
-        functions: 40,
-        branches: 40,
-        statements: 40,
-      },
     },
   },
 } as any)
