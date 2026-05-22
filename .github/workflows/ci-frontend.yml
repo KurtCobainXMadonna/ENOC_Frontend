@@ -38,6 +38,14 @@ jobs:
           ls -la coverage/ || echo "No coverage directory"
           cat coverage/lcov.info | head -20 || echo "No lcov.info"
 
+      - name: Normalize lcov paths (Windows -> Unix)
+        run: |
+          if [ -f coverage/lcov.info ]; then
+            node -e "const fs=require('fs'); const p='coverage/lcov.info'; let s=fs.readFileSync(p,'utf8'); s=s.replace(/\\\\/g,'/'); fs.writeFileSync(p,s); console.log('Normalized lcov paths');" || true
+          else
+            echo 'No coverage/lcov.info to normalize'
+          fi
+
       - name: Sonar analysis (branch)
         if: github.event_name == 'push'
         uses: SonarSource/sonarcloud-github-action@master
