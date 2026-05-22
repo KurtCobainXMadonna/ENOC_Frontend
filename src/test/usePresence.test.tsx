@@ -17,7 +17,7 @@ describe('usePresence hook', () => {
     const fakeSub = { unsubscribe: vi.fn() }
     const fakeClient = { subscribe: vi.fn(() => fakeSub) }
 
-    const { result, unmount } = renderHook(() => usePresence('p1', fakeClient as any, true))
+    const { unmount } = renderHook(() => usePresence('p1', fakeClient as any, true))
 
     // esperar que la REST promise se resuelva y setRoster actualice el store
     await waitFor(() => {
