@@ -54,4 +54,54 @@ describe('useRackSocket hook', () => {
     // cleanup: unmount hook to trigger deactivate
     unmount()
   })
+
+  it('sends all rack commands via publish', async () => {
+    const onEvent = vi.fn()
+
+    const { result, unmount } = renderHook(() => useRackSocket('proj-1', onEvent))
+
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 10))
+    })
+
+    const c: any = result.current.client
+    // addChannel
+    act(() => result.current.addChannel('myName', 'sound-1'))
+    expect(c.published).toBeDefined()
+    expect(c.published.destination).toContain('/channel/add')
+    expect(JSON.parse(c.published.body).name).toBe('myName')
+
+    // removeChannel
+    act(() => result.current.removeChannel('ch-1'))
+    expect(c.published.destination).toContain('/channel/ch-1/remove')
+
+    // toggleMute
+    act(() => result.current.toggleMute('ch-2', true, 50))
+    expect(c.published.destination).toContain('/channel/ch-2/update')
+    const muteBody = JSON.parse(c.published.body)
+    expect(muteBody).toHaveProperty('volume')
+    expect(muteBody).toHaveProperty('active')
+
+    // setVolume
+    act(() => result.current.setVolume('ch-2', 80, true))
+    expect(c.published.destination).toContain('/channel/ch-2/update')
+
+    // lock/unlock
+    act(() => result.current.lockChannel('ch-3'))
+    expect(c.published.destination).toContain('/channel/ch-3/lock')
+    act(() => result.current.unlockChannel('ch-3'))
+    expect(c.published.destination).toContain('/channel/ch-3/unlock')
+
+    // setBpm
+    act(() => result.current.setBpm(120))
+    expect(c.published.destination).toContain('/bpm/update')
+
+    // playback
+    act(() => result.current.startPlayback())
+    expect(c.published.destination).toContain('/playback/start')
+    act(() => result.current.stopPlayback())
+    expect(c.published.destination).toContain('/playback/stop')
+
+    unmount()
+  })
 })
