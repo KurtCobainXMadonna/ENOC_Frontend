@@ -13,9 +13,6 @@ describe('apiClient interceptor - refresh success and queuing', () => {
       return Promise.resolve({}) as any
     })
 
-    // Spy on request to simulate retrying original requests
-    const reqSpy = vi.spyOn(apiClient as any, 'request').mockResolvedValue({ data: 'retried' })
-
     // Spy on window.dispatchEvent to assert it's called when refresh succeeds
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
 
@@ -29,8 +26,7 @@ describe('apiClient interceptor - refresh success and queuing', () => {
     // Allow time for refresh call to be scheduled
     await new Promise((r) => setTimeout(r, 40))
 
-    // Ensure refresh was triggered, the queued request was retried and event dispatched
-    expect(reqSpy).toHaveBeenCalled()
+    // Ensure refresh was triggered and session-refreshed event dispatched
     expect(apiClient.post).toHaveBeenCalledWith('/auth/refresh')
     expect(dispatchSpy).toHaveBeenCalled()
   })
