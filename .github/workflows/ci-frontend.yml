@@ -51,10 +51,10 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.token=${{ secrets.SONAR_TOKEN_FRONTEND }}
             -Dsonar.sources=src
-            -Dsonar.tests=src
+            -Dsonar.tests=src/test
             -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**,src/test/**
             -Dsonar.coverage.exclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/main.tsx,**/vite-env.d.ts,**/setupGlobal.ts,**/types/**,**/*.config.*
 
       - name: Sonar analysis (pull request)
@@ -70,10 +70,10 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.token=${{ secrets.SONAR_TOKEN_FRONTEND }}
             -Dsonar.sources=src
-            -Dsonar.tests=src
+            -Dsonar.tests=src/test
             -Dsonar.test.inclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx
             -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**
+            -Dsonar.exclusions=**/node_modules/**,**/dist/**,**/coverage/**,src/test/**
             -Dsonar.coverage.exclusions=**/*.test.ts,**/*.test.tsx,**/*.spec.ts,**/*.spec.tsx,**/main.tsx,**/vite-env.d.ts,**/setupGlobal.ts,**/types/**,**/*.config.*
             -Dsonar.pullrequest.key=${{ github.event.pull_request.number }}
             -Dsonar.pullrequest.branch=${{ github.head_ref }}
